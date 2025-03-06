@@ -1,0 +1,16 @@
+# Development files
+.env
+.env.example
+.git
+.gitignore
+.vscode
+.DS_Store
+# Test files
+test-*.js
+*.test.js
+# Server files
+server.js
+mcp-handler.js
+cursor-client-example.js
+# Node modules
+node_modules
