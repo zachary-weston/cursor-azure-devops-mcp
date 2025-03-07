@@ -1,16 +1,48 @@
+# Source files
+src/
+tests/
+.typescript/
+tsconfig.json
+*.map
+
 # Development files
-.env
-.env.example
 .git
+.github
 .gitignore
+.prettierrc.json
+.prettierignore
+.eslintrc.json
+.eslintignore
 .vscode
+.idea
+.editorconfig
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+.github/
+.circleci/
+
+# Docs and examples
+docs/
+examples/
+*.md
+!README.md
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Logs and backups
+logs/
+*.log
+backup/
 .DS_Store
-# Test files
-test-*.js
-*.test.js
-# Server files
-server.js
-mcp-handler.js
-cursor-client-example.js
+*.swp
+
 # Node modules
-node_modules
+node_modules/

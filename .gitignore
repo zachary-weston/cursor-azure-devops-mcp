@@ -1,7 +1,33 @@
+# Dependencies
 node_modules/
+
+# Build outputs
 build/
 dist/
 lib/
+
+# Development and backups
 backup/
-.env
+.vscode/
+.idea/
 *.log
+logs/
+*.swp
+.DS_Store
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Temp files
+tmp/
+temp/
+.cache/
+
+# npm package files
+*.tgz
+.npm

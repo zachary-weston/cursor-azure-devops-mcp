@@ -10,7 +10,8 @@
   },
   "files": [
     "build",
-    "README.md"
+    "README.md",
+    ".env.example"
   ],
   "scripts": {
     "start": "node build/index.js",
@@ -18,7 +19,8 @@
     "test-connection": "node build/test-connection.js",
     "sse-server": "node build/sse-server.js",
     "build": "npm run format && tsc && node -e \"require('fs').chmodSync('build/index.js', '755') && require('fs').chmodSync('build/sse-server.js', '755')\"",
-    "prepublishOnly": "npm run check && npm run build",
+    "prepublishOnly": "npm run check && npm run build && npm run security-check",
+    "security-check": "node security-check.js",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -59,10 +61,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/cursor-azure-devops-mcp.git"
+    "url": "git+https://github.com/maximtitovich/cursor-azure-devops-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/cursor-azure-devops-mcp/issues"
+    "url": "https://github.com/maximtitovich/cursor-azure-devops-mcp/issues"
   },
-  "homepage": "https://github.com/yourusername/cursor-azure-devops-mcp#readme"
+  "homepage": "https://github.com/maximtitovich/cursor-azure-devops-mcp#readme"
 }
