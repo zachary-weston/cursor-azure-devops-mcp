@@ -145,4 +145,30 @@ export interface PullRequestChange {
 export interface PullRequestChanges {
   changeEntries: PullRequestChange[];
   totalCount: number;
+}
+
+// New interfaces for PR comments
+export interface PullRequestCommentRequest {
+  repositoryId: string;
+  pullRequestId: number;
+  project: string;
+  threadId?: number;        // If adding to existing thread
+  filePath?: string;        // If commenting on a file
+  lineNumber?: number;      // If commenting on a specific line
+  parentCommentId?: number; // If replying to a specific comment
+  content: string;          // The comment text
+  status?: string;          // Optional status (e.g., 'active', 'fixed')
+}
+
+export interface PullRequestCommentResponse {
+  id: number;
+  content: string;
+  threadId: number;
+  status?: string;
+  author?: {
+    displayName?: string;
+    id?: string;
+  };
+  createdDate?: string;
+  url?: string;
 } 

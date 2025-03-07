@@ -9,7 +9,9 @@ import {
   ApiClients,
   WorkItemAttachment,
   PullRequestChange,
-  PullRequestChanges
+  PullRequestChanges,
+  PullRequestCommentRequest,
+  PullRequestCommentResponse
 } from './types.js';
 
 /**
@@ -351,6 +353,114 @@ class AzureDevOpsService {
     
     const extension = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
     return binaryExtensions.includes(extension);
+  }
+
+  /**
+   * Create a comment on a pull request
+   * @param request The comment request details
+   * @returns The created comment
+   */
+  async createPullRequestComment(request: PullRequestCommentRequest): Promise<PullRequestCommentResponse> {
+    await this.initialize();
+    
+    if (!this.gitClient) {
+      throw new Error('Git client not initialized');
+    }
+    
+    const { 
+      repositoryId, 
+      pullRequestId, 
+      project, 
+      threadId, 
+      filePath, 
+      lineNumber, 
+      parentCommentId, 
+      content, 
+      status = 'active' 
+    } = request;
+    
+    let commentResponse: PullRequestCommentResponse | null = null;
+    
+    try {
+      // Case 1: Adding a comment to an existing thread
+      if (threadId) {
+        // Create comment on existing thread
+        const comment = await this.gitClient.createComment({
+          content,
+          parentCommentId
+        }, repositoryId, pullRequestId, threadId, project);
+        
+        commentResponse = {
+          id: comment.id || 0,
+          content: comment.content || '',
+          threadId,
+          status: comment.status,
+          author: comment.author,
+          createdDate: comment.publishedDate,
+          url: comment.url
+        };
+      } 
+      // Case 2: Creating a new thread with a comment
+      else {
+        // Set up the new thread
+        const threadContext: any = {};
+        
+        if (filePath) {
+          // Comment on a file
+          threadContext.filePath = filePath;
+          
+          // If line number is provided, set up position
+          if (lineNumber) {
+            threadContext.rightFileStart = {
+              line: lineNumber,
+              offset: 1
+            };
+            threadContext.rightFileEnd = {
+              line: lineNumber,
+              offset: 1
+            };
+          }
+        }
+        
+        // Create a new thread with our comment
+        const newThread = await this.gitClient.createThread({
+          comments: [{
+            content,
+            parentCommentId
+          }],
+          status,
+          threadContext
+        }, repositoryId, pullRequestId, project);
+        
+        // Extract the created comment from the thread
+        const createdComment = newThread.comments && newThread.comments.length > 0 ? 
+          newThread.comments[0] : null;
+        
+        if (createdComment && newThread.id) {
+          commentResponse = {
+            id: createdComment.id || 0,
+            content: createdComment.content || '',
+            threadId: newThread.id,
+            status: createdComment.status,
+            author: createdComment.author,
+            createdDate: createdComment.publishedDate,
+            url: createdComment.url
+          };
+        } else {
+          throw new Error('Failed to create comment on pull request');
+        }
+      }
+      
+      return commentResponse || {
+        id: 0,
+        content: '',
+        threadId: threadId || 0,
+        status: 'unknown'
+      };
+    } catch (error) {
+      console.error('Error creating pull request comment:', error);
+      throw new Error(`Failed to create comment: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
 

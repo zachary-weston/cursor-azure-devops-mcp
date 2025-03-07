@@ -12,6 +12,7 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 - View pull request details and threads
 - Retrieve work item attachments (images, PDFs, and other files)
 - Get detailed code changes for pull requests (view file contents before and after changes)
+- Create comments on pull requests (with support for replying to existing comments)
 
 ## Installation
 
@@ -160,6 +161,7 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_pull_request_threads` | Get threads from a pull request     | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
 | `azure_devops_work_item_attachments`| Get attachments for a work item     | `id` (number)                                                         |
 | `azure_devops_pull_request_changes` | Get detailed PR code changes        | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| `azure_devops_create_pr_comment`    | Create a comment on a pull request  | `repositoryId` (string), `pullRequestId` (number), `project` (string), `content` (string), and other optional parameters |
 
 ## Development
 

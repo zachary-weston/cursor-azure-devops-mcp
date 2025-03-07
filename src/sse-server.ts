@@ -241,6 +241,34 @@ app.get('/sse', async (req, res) => {
       }
     );
     
+    // New tool for creating pull request comments
+    server.tool(
+      'azure_devops_create_pr_comment',
+      'Create a comment on a pull request',
+      {
+        repositoryId: z.string().describe('Repository ID'),
+        pullRequestId: z.number().describe('Pull request ID'),
+        project: z.string().describe('Project name'),
+        content: z.string().describe('Comment text'),
+        threadId: z.number().optional().describe('Thread ID (if adding to existing thread)'),
+        filePath: z.string().optional().describe('File path (if commenting on a file)'),
+        lineNumber: z.number().optional().describe('Line number (if commenting on a specific line)'),
+        parentCommentId: z.number().optional().describe('Parent comment ID (if replying to a comment)'),
+        status: z.string().optional().describe('Comment status (e.g., "active", "fixed")')
+      },
+      async (params) => {
+        const result = await azureDevOpsService.createPullRequestComment(params);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        };
+      }
+    );
+    
     // Handle server close
     server.closeHandler = () => {
       console.log('SSE connection closed');
