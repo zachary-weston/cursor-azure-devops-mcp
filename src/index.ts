@@ -10,44 +10,39 @@ import { configManager } from './config-manager.js';
 const server = new McpServer({
   name: 'cursor-azure-devops-mcp',
   version: '1.0.0',
-  description: 'MCP Server for Azure DevOps integration with Cursor IDE'
+  description: 'MCP Server for Azure DevOps integration with Cursor IDE',
 });
 
 // Register Azure DevOps tools
-server.tool(
-  'azure_devops_projects',
-  'List all projects',
-  {},
-  async () => {
-    try {
-      const result = await azureDevOpsService.getProjects();
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
-      };
-    } catch (error) {
-      console.error('Error executing azure_devops_projects:', error);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2)
-          }
-        ]
-      };
-    }
+server.tool('azure_devops_projects', 'List all projects', {}, async () => {
+  try {
+    const result = await azureDevOpsService.getProjects();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('Error executing azure_devops_projects:', error);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ error: String(error) }, null, 2),
+        },
+      ],
+    };
   }
-);
+});
 
 server.tool(
   'azure_devops_work_item',
   'Get a work item by ID',
   {
-    id: z.number().describe('Work item ID')
+    id: z.number().describe('Work item ID'),
   },
   async ({ id }) => {
     try {
@@ -56,9 +51,9 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
       };
     } catch (error) {
       console.error(`Error executing azure_devops_work_item for ID ${id}:`, error);
@@ -66,9 +61,9 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2)
-          }
-        ]
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
       };
     }
   }
@@ -78,7 +73,7 @@ server.tool(
   'azure_devops_work_items',
   'Get multiple work items by IDs',
   {
-    ids: z.array(z.number()).describe('Array of work item IDs')
+    ids: z.array(z.number()).describe('Array of work item IDs'),
   },
   async ({ ids }) => {
     try {
@@ -87,9 +82,9 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
       };
     } catch (error) {
       console.error(`Error executing azure_devops_work_items for IDs ${ids.join(', ')}:`, error);
@@ -97,9 +92,9 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2)
-          }
-        ]
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
       };
     }
   }
@@ -109,7 +104,7 @@ server.tool(
   'azure_devops_repositories',
   'List all repositories',
   {
-    project: z.string().optional().describe('Project name')
+    project: z.string().optional().describe('Project name'),
   },
   async ({ project }) => {
     try {
@@ -118,19 +113,22 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
       };
     } catch (error) {
-      console.error(`Error executing azure_devops_repositories for project ${project || 'default'}:`, error);
+      console.error(
+        `Error executing azure_devops_repositories for project ${project || 'default'}:`,
+        error
+      );
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2)
-          }
-        ]
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
       };
     }
   }
@@ -141,7 +139,7 @@ server.tool(
   'List all pull requests for a repository',
   {
     repositoryId: z.string().describe('Repository ID'),
-    project: z.string().optional().describe('Project name')
+    project: z.string().optional().describe('Project name'),
   },
   async ({ repositoryId, project }) => {
     try {
@@ -150,19 +148,22 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
       };
     } catch (error) {
-      console.error(`Error executing azure_devops_pull_requests for repository ${repositoryId}:`, error);
+      console.error(
+        `Error executing azure_devops_pull_requests for repository ${repositoryId}:`,
+        error
+      );
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2)
-          }
-        ]
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
       };
     }
   }
@@ -174,28 +175,35 @@ server.tool(
   {
     repositoryId: z.string().describe('Repository ID'),
     pullRequestId: z.number().describe('Pull request ID'),
-    project: z.string().optional().describe('Project name')
+    project: z.string().optional().describe('Project name'),
   },
   async ({ repositoryId, pullRequestId, project }) => {
     try {
-      const result = await azureDevOpsService.getPullRequestById(repositoryId, pullRequestId, project || '');
+      const result = await azureDevOpsService.getPullRequestById(
+        repositoryId,
+        pullRequestId,
+        project || ''
+      );
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result, null, 2)
-          }
-        ]
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
       };
     } catch (error) {
-      console.error(`Error executing azure_devops_pull_request_by_id for repository ${repositoryId} PR #${pullRequestId}:`, error);
+      console.error(
+        `Error executing azure_devops_pull_request_by_id for repository ${repositoryId} PR #${pullRequestId}:`,
+        error
+      );
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2)
-          }
-        ]
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
       };
     }
   }
@@ -207,17 +215,21 @@ server.tool(
   {
     repositoryId: z.string().describe('Repository ID'),
     pullRequestId: z.number().describe('Pull request ID'),
-    project: z.string().describe('Project name')
+    project: z.string().describe('Project name'),
   },
   async ({ repositoryId, pullRequestId, project }) => {
-    const result = await azureDevOpsService.getPullRequestThreads(repositoryId, pullRequestId, project);
+    const result = await azureDevOpsService.getPullRequestThreads(
+      repositoryId,
+      pullRequestId,
+      project
+    );
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2)
-        }
-      ]
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
     };
   }
 );
@@ -227,7 +239,7 @@ server.tool(
   'azure_devops_work_item_attachments',
   'Get attachments for a specific work item',
   {
-    id: z.number().describe('Work item ID')
+    id: z.number().describe('Work item ID'),
   },
   async ({ id }) => {
     const result = await azureDevOpsService.getWorkItemAttachments(id);
@@ -235,9 +247,9 @@ server.tool(
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2)
-        }
-      ]
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
     };
   }
 );
@@ -249,17 +261,21 @@ server.tool(
   {
     repositoryId: z.string().describe('Repository ID'),
     pullRequestId: z.number().describe('Pull request ID'),
-    project: z.string().describe('Project name')
+    project: z.string().describe('Project name'),
   },
   async ({ repositoryId, pullRequestId, project }) => {
-    const result = await azureDevOpsService.getPullRequestChanges(repositoryId, pullRequestId, project);
+    const result = await azureDevOpsService.getPullRequestChanges(
+      repositoryId,
+      pullRequestId,
+      project
+    );
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2)
-        }
-      ]
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
     };
   }
 );
@@ -277,17 +293,17 @@ server.tool(
     filePath: z.string().optional().describe('File path (if commenting on a file)'),
     lineNumber: z.number().optional().describe('Line number (if commenting on a specific line)'),
     parentCommentId: z.number().optional().describe('Parent comment ID (if replying to a comment)'),
-    status: z.string().optional().describe('Comment status (e.g., "active", "fixed")')
+    status: z.string().optional().describe('Comment status (e.g., "active", "fixed")'),
   },
-  async (params) => {
+  async params => {
     const result = await azureDevOpsService.createPullRequestComment(params);
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2)
-        }
-      ]
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
     };
   }
 );
@@ -295,21 +311,23 @@ server.tool(
 // Start server
 async function main() {
   // Load configuration from all sources (command line, IDE settings, env vars, defaults)
-  const config = configManager.loadConfig();
-  
+  const _config = configManager.loadConfig();
+
   // Display the configuration (sensitive data redacted)
   configManager.printConfig();
-  
+
   // Check if Azure DevOps configuration is valid
   if (!configManager.isAzureDevOpsConfigValid()) {
     console.error('Azure DevOps configuration is missing or invalid.');
-    console.error('Please provide organizationUrl and token via command line, IDE settings, or environment variables.');
+    console.error(
+      'Please provide organizationUrl and token via command line, IDE settings, or environment variables.'
+    );
     process.exit(1);
   }
 
   try {
     console.error('Starting Azure DevOps MCP Server with stdio transport...');
-    
+
     // Initialize Azure DevOps API connection
     try {
       await azureDevOpsService.initialize();
@@ -318,11 +336,11 @@ async function main() {
       console.error('Failed to initialize Azure DevOps API connection:', error);
       process.exit(1);
     }
-    
+
     // Create transport and connect
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    
+
     console.error('Azure DevOps MCP Server running on stdio');
     console.error('Available tools:');
     console.error('- azure_devops_projects: List all projects');
@@ -333,7 +351,9 @@ async function main() {
     console.error('- azure_devops_pull_request_by_id: Get a pull request by ID');
     console.error('- azure_devops_pull_request_threads: Get threads (comments) for a pull request');
     console.error('- azure_devops_work_item_attachments: Get attachments for a work item');
-    console.error('- azure_devops_pull_request_changes: Get detailed code changes for a pull request');
+    console.error(
+      '- azure_devops_pull_request_changes: Get detailed code changes for a pull request'
+    );
     console.error('- azure_devops_create_pr_comment: Create a comment on a pull request');
   } catch (error) {
     console.error('Error starting server:', error);
@@ -353,7 +373,7 @@ process.on('SIGTERM', () => {
 });
 
 // Run the server
-main().catch((error) => {
+main().catch(error => {
   console.error('Unhandled error:', error);
   process.exit(1);
-}); 
+});

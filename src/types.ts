@@ -152,12 +152,12 @@ export interface PullRequestCommentRequest {
   repositoryId: string;
   pullRequestId: number;
   project: string;
-  threadId?: number;        // If adding to existing thread
-  filePath?: string;        // If commenting on a file
-  lineNumber?: number;      // If commenting on a specific line
+  threadId?: number; // If adding to existing thread
+  filePath?: string; // If commenting on a file
+  lineNumber?: number; // If commenting on a specific line
   parentCommentId?: number; // If replying to a specific comment
-  content: string;          // The comment text
-  status?: string;          // Optional status (e.g., 'active', 'fixed')
+  content: string; // The comment text
+  status?: string; // Optional status (e.g., 'active', 'fixed')
 }
 
 export interface PullRequestCommentResponse {
@@ -171,4 +171,4 @@ export interface PullRequestCommentResponse {
   };
   createdDate?: string;
   url?: string;
-} 
+}

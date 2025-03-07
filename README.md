@@ -255,6 +255,35 @@ registerTools(server, azureDevOpsService);
    npm run dev
    ```
 
+### Code Quality
+
+The project uses ESLint and Prettier to maintain code quality and consistent formatting:
+
+1. Format code using Prettier:
+   ```bash
+   npm run format
+   ```
+
+2. Check if code is properly formatted:
+   ```bash
+   npm run format:check
+   ```
+
+3. Lint code using ESLint:
+   ```bash
+   npm run lint
+   ```
+
+4. Fix auto-fixable linting issues:
+   ```bash
+   npm run lint:fix
+   ```
+
+5. Run both format check and linting:
+   ```bash
+   npm run check
+   ```
+
 ### TypeScript Implementation
 
 This project is implemented in TypeScript using the latest MCP SDK features:

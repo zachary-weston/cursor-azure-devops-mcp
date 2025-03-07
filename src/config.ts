@@ -19,17 +19,17 @@ const ConfigSchema = z.object({
   version: z.string(),
   server: z.object({
     port: z.coerce.number().default(3000),
-    host: z.string().default('localhost')
+    host: z.string().default('localhost'),
   }),
   azureDevOps: z.object({
     organizationUrl: z.string().url().optional(),
     token: z.string().optional(),
-    project: z.string().optional()
+    project: z.string().optional(),
   }),
   logging: z.object({
     level: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
-    enableConsole: z.boolean().default(true)
-  })
+    enableConsole: z.boolean().default(true),
+  }),
 });
 
 // Type for the configuration
@@ -43,17 +43,17 @@ export function loadConfig(): Config {
     version,
     server: {
       port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
-      host: process.env.HOST || 'localhost'
+      host: process.env.HOST || 'localhost',
     },
     azureDevOps: {
       organizationUrl: process.env.AZURE_DEVOPS_ORG_URL,
       token: process.env.AZURE_DEVOPS_TOKEN,
-      project: process.env.AZURE_DEVOPS_PROJECT
+      project: process.env.AZURE_DEVOPS_PROJECT,
     },
     logging: {
       level: (process.env.LOG_LEVEL || 'info') as 'error' | 'warn' | 'info' | 'debug',
-      enableConsole: process.env.ENABLE_CONSOLE_LOGGING !== 'false'
-    }
+      enableConsole: process.env.ENABLE_CONSOLE_LOGGING !== 'false',
+    },
   };
 
   // Validate configuration
@@ -61,4 +61,4 @@ export function loadConfig(): Config {
 }
 
 // Export a singleton instance of the configuration
-export const config = loadConfig(); 
+export const config = loadConfig();

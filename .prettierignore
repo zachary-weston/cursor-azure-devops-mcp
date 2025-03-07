@@ -1,0 +1,8 @@
+node_modules/
+build/
+coverage/
+*.md
+*.yaml
+*.yml
+.env
+.env.example 
