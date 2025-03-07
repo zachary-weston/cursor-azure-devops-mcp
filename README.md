@@ -30,11 +30,64 @@ npm install cursor-azure-devops-mcp
 
 ## Configuration
 
+The server can be configured using multiple sources, with the following priority:
+
+1. Command line arguments
+2. VSCode/Cursor IDE settings
+3. Environment variables / `.env` file
+4. Default values
+
+### Command Line Arguments
+
+You can configure the server using command line arguments:
+
+```bash
+npx cursor-azure-devops-mcp --azure-org-url=https://dev.azure.com/your-organization --azure-token=your-token --azure-project=YourProject
+```
+
+Available options:
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--azure-org-url` | `--org` | Azure DevOps organization URL |
+| `--azure-token` | `--token` | Azure DevOps personal access token |
+| `--azure-project` | `--project` | Default Azure DevOps project name |
+| `--port` | `-p` | Server port (for HTTP mode) |
+| `--host` | `-h` | Server hostname (for HTTP mode) |
+| `--log-level` | `--log` | Logging level (error, warn, info, debug) |
+| `--help` | `-?` | Show help |
+
+### VSCode/Cursor IDE Settings
+
+You can configure the server in your VSCode or Cursor IDE settings:
+
+1. Global settings: `~/.vscode/settings.json` or `~/.cursor/settings.json`
+2. Workspace settings: `.vscode/settings.json` or `.cursor/settings.json`
+
+Example settings:
+
+```json
+{
+  "azureDevOps.organization": "your-organization",
+  "azureDevOps.token": "your-personal-access-token",
+  "azureDevOps.project": "YourProject",
+  "cursor-azure-devops-mcp": {
+    "port": 3000,
+    "logLevel": "info"
+  }
+}
+```
+
+### Environment Variables
+
 Create a `.env` file in your project root with the following variables:
 
 ```
 AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-organization
 AZURE_DEVOPS_TOKEN=your-personal-access-token
+AZURE_DEVOPS_PROJECT=YourProject
+PORT=3000
+LOG_LEVEL=info
 ```
 
 You can also copy the provided `.env.example` file:
@@ -326,6 +379,8 @@ If you're changing the port in your `.env` file but the server still runs on por
    HOST=localhost
    AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-organization
    AZURE_DEVOPS_TOKEN=your-personal-access-token
+   AZURE_DEVOPS_PROJECT=YourProject
+   LOG_LEVEL=info
    ```
 
 3. **Use Command mode instead**:

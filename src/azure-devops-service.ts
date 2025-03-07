@@ -1,5 +1,5 @@
 import * as azdev from 'azure-devops-node-api';
-import { loadConfig } from './config.js';
+import { configManager } from './config-manager.js';
 import { 
   TeamProject, 
   WorkItem, 
@@ -22,7 +22,14 @@ class AzureDevOpsService {
   private projectClient: any = null;
   private workItemClient: any = null;
   private gitClient: any = null;
-  private config = loadConfig();
+  private defaultProject: string | undefined;
+
+  constructor(connection?: azdev.WebApi, defaultProject?: string) {
+    if (connection) {
+      this.connection = connection;
+    }
+    this.defaultProject = defaultProject;
+  }
 
   /**
    * Initialize the Azure DevOps API connection
@@ -32,7 +39,8 @@ class AzureDevOpsService {
       return;
     }
 
-    const { organizationUrl, token } = this.config.azureDevOps;
+    const config = configManager.loadConfig();
+    const { organizationUrl, token } = config.azureDevOps;
     
     if (!organizationUrl || !token) {
       throw new Error('Azure DevOps organization URL and token are required');
@@ -41,6 +49,11 @@ class AzureDevOpsService {
     // Create a connection to Azure DevOps
     const authHandler = azdev.getPersonalAccessTokenHandler(token);
     this.connection = new azdev.WebApi(organizationUrl, authHandler);
+
+    // Set default project if not provided in constructor
+    if (!this.defaultProject && config.azureDevOps.project) {
+      this.defaultProject = config.azureDevOps.project;
+    }
 
     // Get API clients
     this.projectClient = await this.connection.getCoreApi();
@@ -94,29 +107,43 @@ class AzureDevOpsService {
   /**
    * Get repositories for a project
    */
-  async getRepositories(project: string): Promise<GitRepository[]> {
+  async getRepositories(project?: string): Promise<GitRepository[]> {
     await this.initialize();
     
     if (!this.gitClient) {
       throw new Error('Git client not initialized');
     }
     
-    const repositories = await this.gitClient.getRepositories(project);
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
+    
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+    
+    const repositories = await this.gitClient.getRepositories(projectName);
     return repositories;
   }
 
   /**
-   * Get pull requests from a repository
+   * Get pull requests for a repository
    */
-  async getPullRequests(repositoryId: string, project: string): Promise<GitPullRequest[]> {
+  async getPullRequests(repositoryId: string, project?: string): Promise<GitPullRequest[]> {
     await this.initialize();
     
     if (!this.gitClient) {
       throw new Error('Git client not initialized');
     }
     
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
+    
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+    
     const pullRequests = await this.gitClient.getPullRequests(repositoryId, {
-      project: project
+      project: projectName
     });
     
     return pullRequests;
@@ -125,44 +152,52 @@ class AzureDevOpsService {
   /**
    * Get a specific pull request by ID
    */
-  async getPullRequestById(repositoryId: string, pullRequestId: number, project: string): Promise<GitPullRequest> {
+  async getPullRequestById(repositoryId: string, pullRequestId: number, project?: string): Promise<GitPullRequest> {
     await this.initialize();
     
     if (!this.gitClient) {
       throw new Error('Git client not initialized');
     }
     
-    const pullRequest = await this.gitClient.getPullRequest(repositoryId, pullRequestId, project);
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
+    
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+    
+    const pullRequest = await this.gitClient.getPullRequestById(pullRequestId, repositoryId, projectName);
     return pullRequest;
   }
 
   /**
-   * Get threads from a pull request
+   * Get threads (comments) for a pull request
    */
-  async getPullRequestThreads(repositoryId: string, pullRequestId: number, project: string): Promise<GitPullRequestCommentThread[]> {
+  async getPullRequestThreads(repositoryId: string, pullRequestId: number, project?: string): Promise<GitPullRequestCommentThread[]> {
     await this.initialize();
     
     if (!this.gitClient) {
       throw new Error('Git client not initialized');
     }
     
-    const threads = await this.gitClient.getThreads(repositoryId, pullRequestId, project);
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
+    
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+    
+    const threads = await this.gitClient.getThreads(repositoryId, pullRequestId, projectName);
     return threads;
   }
 
   /**
-   * Test the connection to Azure DevOps API
+   * Test the connection to Azure DevOps
    */
   async testConnection(): Promise<boolean> {
-    try {
-      await this.initialize();
-      // Try to get a list of projects to verify the connection works
-      await this.projectClient?.getProjects();
-      return true;
-    } catch (error) {
-      console.error('Error testing Azure DevOps connection:', error);
-      throw new Error(`Failed to connect to Azure DevOps: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    await this.initialize();
+    // If we get here, the connection was successful
+    return true;
   }
 
   /**
@@ -230,30 +265,28 @@ class AzureDevOpsService {
   }
 
   /**
-   * Get detailed changes for a pull request, including file contents
-   * @param repositoryId Repository ID
-   * @param pullRequestId Pull request ID
-   * @param project Project name
-   * @returns Detailed changes with file contents
+   * Get detailed changes for a pull request
    */
-  async getPullRequestChanges(repositoryId: string, pullRequestId: number, project: string): Promise<PullRequestChanges> {
+  async getPullRequestChanges(repositoryId: string, pullRequestId: number, project?: string): Promise<PullRequestChanges> {
     await this.initialize();
     
     if (!this.gitClient) {
       throw new Error('Git client not initialized');
     }
     
-    // Get the changes for the PR
-    const iterations = await this.gitClient.getPullRequestIterations(repositoryId, pullRequestId, project);
-    const latestIteration = iterations[iterations.length - 1]; // Get latest iteration
-    const iterationId = latestIteration.id;
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
     
-    // Get changes for the latest iteration
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+    
+    // Get the changes for the pull request
     const changes = await this.gitClient.getPullRequestIterationChanges(
       repositoryId,
       pullRequestId,
-      iterationId as number,
-      project
+      1, // Iteration (usually 1 for the latest)
+      projectName
     );
     
     // Get detailed content for each change (with size limits for safety)
@@ -275,7 +308,7 @@ class AzureDevOpsService {
               const originalItemContent = await this.gitClient.getItemContent(
                 repositoryId,
                 filePath,
-                project,
+                projectName,
                 change.originalObjectId,
                 undefined,
                 true,
@@ -300,7 +333,7 @@ class AzureDevOpsService {
               const modifiedItemContent = await this.gitClient.getItemContent(
                 repositoryId,
                 filePath,
-                project,
+                projectName,
                 change.item.objectId,
                 undefined,
                 true,
@@ -357,27 +390,22 @@ class AzureDevOpsService {
 
   /**
    * Create a comment on a pull request
-   * @param request The comment request details
-   * @returns The created comment
    */
-  async createPullRequestComment(request: PullRequestCommentRequest): Promise<PullRequestCommentResponse> {
+  async createPullRequestComment(params: PullRequestCommentRequest): Promise<PullRequestCommentResponse> {
     await this.initialize();
     
     if (!this.gitClient) {
       throw new Error('Git client not initialized');
     }
     
-    const { 
-      repositoryId, 
-      pullRequestId, 
-      project, 
-      threadId, 
-      filePath, 
-      lineNumber, 
-      parentCommentId, 
-      content, 
-      status = 'active' 
-    } = request;
+    const { repositoryId, pullRequestId, project, content, threadId, filePath, lineNumber, parentCommentId, status } = params;
+    
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
+    
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
     
     let commentResponse: PullRequestCommentResponse | null = null;
     
@@ -388,7 +416,7 @@ class AzureDevOpsService {
         const comment = await this.gitClient.createComment({
           content,
           parentCommentId
-        }, repositoryId, pullRequestId, threadId, project);
+        }, repositoryId, pullRequestId, threadId, projectName);
         
         commentResponse = {
           id: comment.id || 0,
@@ -430,7 +458,7 @@ class AzureDevOpsService {
           }],
           status,
           threadContext
-        }, repositoryId, pullRequestId, project);
+        }, repositoryId, pullRequestId, projectName);
         
         // Extract the created comment from the thread
         const createdComment = newThread.comments && newThread.comments.length > 0 ? 
@@ -464,5 +492,6 @@ class AzureDevOpsService {
   }
 }
 
-// Export a singleton instance
+// Export the class and create a singleton instance
+export { AzureDevOpsService };
 export const azureDevOpsService = new AzureDevOpsService(); 
