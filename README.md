@@ -226,7 +226,7 @@ registerTools(server, azureDevOpsService);
 
 ### Prerequisites
 
-- Node.js 16 or higher
+- Node.js 18 or higher
 - npm or yarn
 - Azure DevOps account with a personal access token
 
