@@ -111,4 +111,38 @@ export interface ApiClients {
   projectClient: any;
   workItemClient: any;
   gitClient: any;
+}
+
+// Work Item Attachment
+export interface WorkItemAttachment {
+  id?: string;
+  url: string;
+  name: string;
+  comment?: string;
+  resourceSize?: number;
+  contentType?: string;
+  content?: string | Buffer; // May include actual content in base64 or binary
+}
+
+// Pull Request Change
+export interface PullRequestChange {
+  changeId: string;
+  item?: {
+    objectId?: string;
+    originalObjectId?: string;
+    path?: string;
+    contentMetadata?: {
+      fileName?: string;
+      extension?: string;
+    };
+    isFolder?: boolean;
+  };
+  changeType?: string; // Add, Edit, Delete
+  originalContent?: string; // Content before change
+  modifiedContent?: string; // Content after change
+}
+
+export interface PullRequestChanges {
+  changeEntries: PullRequestChange[];
+  totalCount: number;
 } 

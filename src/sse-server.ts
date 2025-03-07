@@ -199,6 +199,48 @@ app.get('/sse', async (req, res) => {
       }
     );
     
+    // New tool for work item attachments
+    server.tool(
+      'azure_devops_work_item_attachments',
+      'Get attachments for a specific work item',
+      {
+        id: z.number().describe('Work item ID')
+      },
+      async ({ id }) => {
+        const result = await azureDevOpsService.getWorkItemAttachments(id);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        };
+      }
+    );
+    
+    // New tool for pull request changes with file contents
+    server.tool(
+      'azure_devops_pull_request_changes',
+      'Get detailed code changes for a pull request',
+      {
+        repositoryId: z.string().describe('Repository ID'),
+        pullRequestId: z.number().describe('Pull request ID'),
+        project: z.string().describe('Project name')
+      },
+      async ({ repositoryId, pullRequestId, project }) => {
+        const result = await azureDevOpsService.getPullRequestChanges(repositoryId, pullRequestId, project);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        };
+      }
+    );
+    
     // Handle server close
     server.closeHandler = () => {
       console.log('SSE connection closed');

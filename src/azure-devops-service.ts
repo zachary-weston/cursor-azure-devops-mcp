@@ -6,7 +6,10 @@ import {
   GitRepository, 
   GitPullRequest, 
   GitPullRequestCommentThread,
-  ApiClients
+  ApiClients,
+  WorkItemAttachment,
+  PullRequestChange,
+  PullRequestChanges
 } from './types.js';
 
 /**
@@ -174,6 +177,180 @@ class AzureDevOpsService {
       workItemClient: this.workItemClient,
       gitClient: this.gitClient
     };
+  }
+
+  /**
+   * Get attachments for a specific work item
+   * @param workItemId The ID of the work item
+   * @returns Array of attachments with metadata
+   */
+  async getWorkItemAttachments(workItemId: number): Promise<WorkItemAttachment[]> {
+    await this.initialize();
+    
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+    
+    // Get work item with relations (includes attachments)
+    const workItem = await this.workItemClient.getWorkItem(
+      workItemId, 
+      undefined, 
+      undefined, 
+      4 // 4 = WorkItemExpand.Relations in the SDK
+    );
+    
+    if (!workItem || !workItem.relations) {
+      return [];
+    }
+    
+    // Filter for attachment relations
+    const attachmentRelations = workItem.relations.filter((relation: any) => 
+      relation.rel === 'AttachedFile' || relation.rel === 'Hyperlink'
+    );
+    
+    // Map relations to attachment objects
+    const attachments = attachmentRelations.map((relation: any) => {
+      const url = relation.url;
+      const attributes = relation.attributes || {};
+      
+      const attachment: WorkItemAttachment = {
+        url,
+        name: attributes.name || url.split('/').pop() || 'unnamed',
+        comment: attributes.comment || '',
+        resourceSize: attributes.resourceSize || 0,
+        contentType: attributes.resourceType || ''
+      };
+      
+      return attachment;
+    });
+    
+    return attachments;
+  }
+
+  /**
+   * Get detailed changes for a pull request, including file contents
+   * @param repositoryId Repository ID
+   * @param pullRequestId Pull request ID
+   * @param project Project name
+   * @returns Detailed changes with file contents
+   */
+  async getPullRequestChanges(repositoryId: string, pullRequestId: number, project: string): Promise<PullRequestChanges> {
+    await this.initialize();
+    
+    if (!this.gitClient) {
+      throw new Error('Git client not initialized');
+    }
+    
+    // Get the changes for the PR
+    const iterations = await this.gitClient.getPullRequestIterations(repositoryId, pullRequestId, project);
+    const latestIteration = iterations[iterations.length - 1]; // Get latest iteration
+    const iterationId = latestIteration.id;
+    
+    // Get changes for the latest iteration
+    const changes = await this.gitClient.getPullRequestIterationChanges(
+      repositoryId,
+      pullRequestId,
+      iterationId as number,
+      project
+    );
+    
+    // Get detailed content for each change (with size limits for safety)
+    const MAX_FILE_SIZE = 100000; // Limit file size to 100KB for performance
+    const enhancedChanges = await Promise.all((changes.changeEntries || []).map(async (change: any) => {
+      const filePath = change.item?.path || '';
+      let originalContent = null;
+      let modifiedContent = null;
+      
+      // Skip folders or binary files
+      const isBinary = this.isBinaryFile(filePath);
+      const isFolder = change.item?.isFolder === true;
+      
+      if (!isFolder && !isBinary && change.item) {
+        try {
+          // Get original content if the file wasn't newly added
+          if (change.changeType !== 'add' && change.originalObjectId) {
+            try {
+              const originalItemContent = await this.gitClient.getItemContent(
+                repositoryId,
+                filePath,
+                project,
+                change.originalObjectId,
+                undefined,
+                true,
+                true
+              );
+              
+              // Check if the content is too large
+              if (originalItemContent && originalItemContent.length < MAX_FILE_SIZE) {
+                originalContent = originalItemContent.toString('utf8');
+              } else {
+                originalContent = '(File too large to display)';
+              }
+            } catch (error) {
+              console.error(`Error getting original content for ${filePath}:`, error);
+              originalContent = '(Content unavailable)';
+            }
+          }
+          
+          // Get modified content if the file wasn't deleted
+          if (change.changeType !== 'delete' && change.item.objectId) {
+            try {
+              const modifiedItemContent = await this.gitClient.getItemContent(
+                repositoryId,
+                filePath,
+                project,
+                change.item.objectId,
+                undefined,
+                true,
+                true
+              );
+              
+              // Check if the content is too large
+              if (modifiedItemContent && modifiedItemContent.length < MAX_FILE_SIZE) {
+                modifiedContent = modifiedItemContent.toString('utf8');
+              } else {
+                modifiedContent = '(File too large to display)';
+              }
+            } catch (error) {
+              console.error(`Error getting modified content for ${filePath}:`, error);
+              modifiedContent = '(Content unavailable)';
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing file ${filePath}:`, error);
+        }
+      }
+      
+      // Create enhanced change object
+      const enhancedChange: PullRequestChange = {
+        ...change,
+        originalContent,
+        modifiedContent
+      } as PullRequestChange;
+      
+      return enhancedChange;
+    }));
+    
+    return {
+      changeEntries: enhancedChanges,
+      totalCount: enhancedChanges.length
+    };
+  }
+  
+  /**
+   * Helper function to determine if a file is likely binary based on extension
+   */
+  private isBinaryFile(filePath: string): boolean {
+    const binaryExtensions = [
+      '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.svg',
+      '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+      '.zip', '.tar', '.gz', '.rar', '.7z',
+      '.exe', '.dll', '.so', '.dylib',
+      '.bin', '.dat', '.class'
+    ];
+    
+    const extension = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+    return binaryExtensions.includes(extension);
   }
 }
 
