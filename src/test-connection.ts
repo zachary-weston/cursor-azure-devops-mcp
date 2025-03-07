@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 
 import { azureDevOpsService } from './azure-devops-service.js';
-import { config } from './config.js';
+import { configManager } from './config-manager.js';
 
 /**
  * Test connection to Azure DevOps API
  */
 async function testConnection() {
+  // Load configuration from all sources (command line, IDE settings, env vars, defaults)
+  const config = configManager.loadConfig();
+
   console.log('Testing connection to Azure DevOps...');
   console.log(`Organization URL: ${config.azureDevOps.organizationUrl}`);
 
   try {
-    // Test connection
-    await azureDevOpsService.testConnection();
+    // Initialize the Azure DevOps API client
+    await azureDevOpsService.initialize();
     console.log('✅ Connection successful!');
 
     // Get projects

@@ -263,57 +263,43 @@ export class ConfigManager {
    * Load configuration from environment variables / .env file
    */
   private loadEnvConfig(): Partial<Config> {
-    // Load .env file if it exists
-    dotenv.config();
+    // Load .env file from various locations
+    const rootEnvPath = path.resolve('.env');
+    const rootEnvResult = dotenv.config({ path: rootEnvPath });
 
-    const result: Partial<Config> = {
+    // Also try loading from the current working directory
+    const cwd = process.cwd();
+    const cwdEnvPath = path.join(cwd, '.env');
+    if (fs.existsSync(cwdEnvPath)) {
+      dotenv.config({ path: cwdEnvPath });
+    }
+
+    // Try loading from the parent directory
+    const parentEnvPath = path.join(cwd, '..', '.env');
+    if (fs.existsSync(parentEnvPath)) {
+      dotenv.config({ path: parentEnvPath });
+    }
+
+    // Create the result configuration object directly from environment variables
+    return {
       server: {
-        port: DEFAULT_CONFIG.server.port,
-        host: DEFAULT_CONFIG.server.host,
+        port: process.env.PORT ? parseInt(process.env.PORT, 10) : DEFAULT_CONFIG.server.port,
+        host: process.env.HOST || DEFAULT_CONFIG.server.host,
       },
       azureDevOps: {
-        organizationUrl: undefined,
-        token: undefined,
-        project: undefined,
+        organizationUrl: process.env.AZURE_DEVOPS_ORG_URL,
+        token: process.env.AZURE_DEVOPS_TOKEN,
+        project: process.env.AZURE_DEVOPS_PROJECT,
       },
       logging: {
-        level: DEFAULT_CONFIG.logging.level,
-        enableConsole: DEFAULT_CONFIG.logging.enableConsole,
+        level: (process.env.LOG_LEVEL || DEFAULT_CONFIG.logging.level) as
+          | 'error'
+          | 'warn'
+          | 'info'
+          | 'debug',
+        enableConsole: process.env.ENABLE_CONSOLE_LOGGING !== 'false',
       },
     };
-
-    // Server config
-    if (process.env.PORT !== undefined) {
-      result.server!.port = parseInt(process.env.PORT, 10);
-    }
-
-    if (process.env.HOST !== undefined) {
-      result.server!.host = process.env.HOST;
-    }
-
-    // Azure DevOps config
-    if (process.env.AZURE_DEVOPS_ORG_URL !== undefined) {
-      result.azureDevOps!.organizationUrl = process.env.AZURE_DEVOPS_ORG_URL;
-    }
-
-    if (process.env.AZURE_DEVOPS_TOKEN !== undefined) {
-      result.azureDevOps!.token = process.env.AZURE_DEVOPS_TOKEN;
-    }
-
-    if (process.env.AZURE_DEVOPS_PROJECT !== undefined) {
-      result.azureDevOps!.project = process.env.AZURE_DEVOPS_PROJECT;
-    }
-
-    // Logging config
-    if (process.env.LOG_LEVEL !== undefined) {
-      result.logging!.level = process.env.LOG_LEVEL as 'error' | 'warn' | 'info' | 'debug';
-    }
-
-    if (process.env.ENABLE_CONSOLE_LOGGING !== undefined) {
-      result.logging!.enableConsole = process.env.ENABLE_CONSOLE_LOGGING !== 'false';
-    }
-
-    return result;
   }
 
   /**
@@ -335,26 +321,48 @@ export class ConfigManager {
     const ideConfig = this.loadIdeSettings();
     const cmdLineConfig = this.parseCommandLineArgs();
 
-    // Deep merge the configurations with proper priority
+    // Directly create the merged config to avoid issues with nested objects
     const mergedConfig = {
-      ...baseConfig,
+      version: this.packageJson.version,
       server: {
-        ...baseConfig.server,
-        ...envConfig.server,
-        ...ideConfig.server,
-        ...cmdLineConfig.server,
+        port:
+          cmdLineConfig.server?.port ||
+          ideConfig.server?.port ||
+          envConfig.server?.port ||
+          DEFAULT_CONFIG.server.port,
+        host:
+          cmdLineConfig.server?.host ||
+          ideConfig.server?.host ||
+          envConfig.server?.host ||
+          DEFAULT_CONFIG.server.host,
       },
       azureDevOps: {
-        ...baseConfig.azureDevOps,
-        ...envConfig.azureDevOps,
-        ...ideConfig.azureDevOps,
-        ...cmdLineConfig.azureDevOps,
+        organizationUrl:
+          cmdLineConfig.azureDevOps?.organizationUrl ||
+          ideConfig.azureDevOps?.organizationUrl ||
+          envConfig.azureDevOps?.organizationUrl,
+        token:
+          cmdLineConfig.azureDevOps?.token ||
+          ideConfig.azureDevOps?.token ||
+          envConfig.azureDevOps?.token,
+        project:
+          cmdLineConfig.azureDevOps?.project ||
+          ideConfig.azureDevOps?.project ||
+          envConfig.azureDevOps?.project,
       },
       logging: {
-        ...baseConfig.logging,
-        ...envConfig.logging,
-        ...ideConfig.logging,
-        ...cmdLineConfig.logging,
+        level: (cmdLineConfig.logging?.level ||
+          ideConfig.logging?.level ||
+          envConfig.logging?.level ||
+          DEFAULT_CONFIG.logging.level) as 'error' | 'warn' | 'info' | 'debug',
+        enableConsole:
+          cmdLineConfig.logging?.enableConsole !== undefined
+            ? cmdLineConfig.logging?.enableConsole
+            : ideConfig.logging?.enableConsole !== undefined
+              ? ideConfig.logging?.enableConsole
+              : envConfig.logging?.enableConsole !== undefined
+                ? envConfig.logging?.enableConsole
+                : DEFAULT_CONFIG.logging.enableConsole,
       },
     };
 
