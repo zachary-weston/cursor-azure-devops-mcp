@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run linting and formatting checks
+      run: npm run check
+      
+    - name: Run security check
+      run: npm run security-check
+      
+    - name: Build
+      run: npm run build
+      
+    # We can't run test-connection here since it requires Azure DevOps credentials
+    # Instead, we can make sure the build doesn't have errors
+    - name: Verify build artifacts
+      run: |
+        if [ ! -f "./build/index.js" ]; then
+          echo "Build failed - index.js not found"
+          exit 1
+        fi
+        if [ ! -f "./build/sse-server.js" ]; then
+          echo "Build failed - sse-server.js not found"
+          exit 1
+        fi 

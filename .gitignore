@@ -14,6 +14,9 @@ backup/
 logs/
 *.swp
 .DS_Store
+# Don't ignore GitHub workflows
+!.github/
+!.github/workflows/
 
 # Environment and secrets
 .env

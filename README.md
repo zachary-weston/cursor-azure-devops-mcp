@@ -310,6 +310,40 @@ npm run build
 npm publish
 ```
 
+## Continuous Integration and Deployment
+
+This project uses GitHub Actions for automated builds, testing, and publishing.
+
+### CI Workflow
+
+The CI workflow runs on every push to the main and develop branches, as well as on pull requests:
+
+- Builds the project with Node.js 16.x, 18.x, and 20.x
+- Runs linting and formatting checks
+- Performs security checks to prevent sensitive data exposure
+- Ensures the build completes successfully
+
+You can see the workflow details in `.github/workflows/ci.yml`.
+
+### CD Workflow (Publishing)
+
+The publishing workflow runs when:
+- A change is pushed to the main branch that modifies `package.json` or source code
+- A new GitHub release is created
+
+It performs the following steps:
+1. Runs all checks and builds the package
+2. Extracts the package version from package.json
+3. Checks if that version already exists on npm
+4. If the version is new, publishes the package to npm
+
+To use this workflow, you need to:
+1. Add an `NPM_TOKEN` secret to your GitHub repository settings
+2. Increase the version number in package.json when ready to publish
+3. Push to the main branch or create a new GitHub release
+
+You can see the workflow details in `.github/workflows/publish.yml`.
+
 ## Troubleshooting
 
 ### Summary of Common Issues and Solutions
