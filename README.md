@@ -1,5 +1,11 @@
 # Cursor Azure DevOps MCP Server
 
+[![CI](https://github.com/maximtitovich/cursor-azure-devops-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/maximtitovich/cursor-azure-devops-mcp/actions/workflows/ci.yml)
+[![Publish](https://github.com/maximtitovich/cursor-azure-devops-mcp/actions/workflows/publish.yml/badge.svg)](https://github.com/maximtitovich/cursor-azure-devops-mcp/actions/workflows/publish.yml)
+[![Version Bump](https://github.com/maximtitovich/cursor-azure-devops-mcp/actions/workflows/version-bump.yml/badge.svg)](https://github.com/maximtitovich/cursor-azure-devops-mcp/actions/workflows/version-bump.yml)
+[![npm version](https://img.shields.io/npm/v/cursor-azure-devops-mcp)](https://www.npmjs.com/package/cursor-azure-devops-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor IDE. This tool allows Claude AI in Cursor to interact with Azure DevOps, providing access to projects, work items, repositories, and pull requests.
 
 ## Features
@@ -313,6 +319,16 @@ npm publish
 ## Continuous Integration and Deployment
 
 This project uses GitHub Actions for automated builds, testing, and publishing.
+
+### Status Badges
+
+The status badges at the top of the README provide real-time information about the project:
+
+- **CI**: Shows the status of the continuous integration workflow (build and tests)
+- **Publish**: Indicates the status of the npm publishing workflow
+- **Version Bump**: Indicates the status of the version bump workflow
+- **npm version**: Shows the latest published version on npm
+- **License**: Indicates the project license type
 
 ### CI Workflow
 
