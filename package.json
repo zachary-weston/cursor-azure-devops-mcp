@@ -32,7 +32,7 @@
     "ide",
     "model-context-protocol"
   ],
-  "author": "",
+  "author": "Maxim Titovich <maxim.work@titovich.me> (https://github.com/maximtitovich)",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
