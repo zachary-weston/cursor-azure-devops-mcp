@@ -346,17 +346,24 @@ You can see the workflow details in `.github/workflows/ci.yml`.
 The publishing workflow runs when:
 - A change is pushed to the main branch that modifies `package.json` or source code
 - A new GitHub release is created
+- Manually triggered via GitHub Actions interface
 
 It performs the following steps:
 1. Runs all checks and builds the package
 2. Extracts the package version from package.json
 3. Checks if that version already exists on npm
-4. If the version is new, publishes the package to npm
+4. If the version exists, automatically bumps the patch version
+5. Creates a GitHub release for the new version
+6. Publishes the package to npm
 
 To use this workflow, you need to:
 1. Add an `NPM_TOKEN` secret to your GitHub repository settings
-2. Increase the version number in package.json when ready to publish
-3. Push to the main branch or create a new GitHub release
+2. Either:
+   - Push changes to the main branch (auto-versioning will handle the rest)
+   - Manually trigger the workflow from the Actions tab
+   - Create a GitHub release
+
+The workflow supports automatic version bumping when a version conflict is detected, making continuous delivery seamless.
 
 You can see the workflow details in `.github/workflows/publish.yml`.
 

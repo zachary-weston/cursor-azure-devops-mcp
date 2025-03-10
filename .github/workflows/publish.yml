@@ -10,12 +10,24 @@ on:
       - 'build/**'
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: 'Force publish even if version exists'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
     
     - name: Use Node.js
       uses: actions/setup-node@v3
@@ -23,6 +35,11 @@ jobs:
         node-version: '20.x'
         cache: 'npm'
         registry-url: 'https://registry.npmjs.org'
+    
+    - name: Setup Git
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
     
     - name: Install dependencies
       run: npm ci
@@ -52,9 +69,54 @@ jobs:
           echo "Version ${{ steps.extract_version.outputs.version }} doesn't exist yet"
         fi
       continue-on-error: true
+    
+    # Auto bump version if it already exists and force_publish is true or triggered by push
+    - name: Auto bump version if needed
+      id: auto_bump
+      if: |
+        (steps.version_check.outputs.exists == 'true') && 
+        ((github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.force_publish))
+      run: |
+        echo "Auto-bumping version because version ${{ steps.extract_version.outputs.version }} already exists"
+        npm version patch -m "Auto bump version to %s [skip ci]"
+        echo "new_version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+    
+    # Get final version to use
+    - name: Determine final version
+      id: final_version
+      run: |
+        if [[ "${{ steps.auto_bump.outputs.new_version }}" != "" ]]; then
+          echo "version=${{ steps.auto_bump.outputs.new_version }}" >> $GITHUB_OUTPUT
+          echo "Using auto-bumped version: ${{ steps.auto_bump.outputs.new_version }}"
+        else
+          echo "version=${{ steps.extract_version.outputs.version }}" >> $GITHUB_OUTPUT
+          echo "Using original version: ${{ steps.extract_version.outputs.version }}"
+        fi
+    
+    # Push changes if version was bumped
+    - name: Push changes if version was bumped
+      if: steps.auto_bump.outputs.new_version != ''
+      run: |
+        git push
+        git push --tags
+    
+    # Create GitHub release if version was bumped or if the version doesn't exist (for manual releases)
+    - name: Create GitHub Release
+      if: |
+        (steps.auto_bump.outputs.new_version != '') || 
+        (steps.version_check.outputs.exists == 'false')
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.final_version.outputs.version }}
+        name: Release v${{ steps.final_version.outputs.version }}
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
     - name: Publish to npm
-      if: steps.version_check.outputs.exists != 'true'
+      if: |
+        (steps.version_check.outputs.exists == 'false') || 
+        (steps.auto_bump.outputs.new_version != '')
       run: npm publish
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} 
