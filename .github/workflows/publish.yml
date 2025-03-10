@@ -3,11 +3,14 @@ name: Publish to npm
 on:
   push:
     branches: [ "main" ]
-    # Only trigger when package.json changes or when a release tag is created
-    paths:
-      - 'package.json'
-      - 'src/**'
-      - 'build/**'
+    # Exclude paths that shouldn't trigger a build/release
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - '.vscode/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - 'docs/**'
   release:
     types: [created]
   workflow_dispatch:
@@ -92,6 +95,15 @@ jobs:
           echo "version=${{ steps.extract_version.outputs.version }}" >> $GITHUB_OUTPUT
           echo "Using original version: ${{ steps.extract_version.outputs.version }}"
         fi
+        
+        # Debug event info
+        echo "==== Debug Information ===="
+        echo "Event name: ${{ github.event_name }}"
+        echo "Current version: ${{ steps.extract_version.outputs.version }}"
+        echo "Version exists: ${{ steps.version_check.outputs.exists }}"
+        echo "Auto-bump triggered: ${{ steps.auto_bump.outputs.new_version != '' }}"
+        echo "Final version for publishing: ${{ steps.final_version.outputs.version }}"
+        echo "==========================="
     
     # Push changes if version was bumped
     - name: Push changes if version was bumped
@@ -112,11 +124,25 @@ jobs:
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    # Debug publishing conditions  
+    - name: Debug publishing conditions
+      run: |
+        echo "==== Publishing Conditions ===="
+        echo "Version doesn't exist: ${{ steps.version_check.outputs.exists == 'false' }}"
+        echo "Auto-bumped version: ${{ steps.auto_bump.outputs.new_version != '' }}"
+        echo "Should publish: ${{ (steps.version_check.outputs.exists == 'false') || (steps.auto_bump.outputs.new_version != '') }}"
+        echo "==============================="
       
+    # Publish to npm if:
+    # 1. The version doesn't exist on npm, OR
+    # 2. We auto-bumped to a new version
     - name: Publish to npm
       if: |
         (steps.version_check.outputs.exists == 'false') || 
         (steps.auto_bump.outputs.new_version != '')
-      run: npm publish
+      run: |
+        echo "Publishing version ${{ steps.final_version.outputs.version }} to npm"
+        npm publish
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} 

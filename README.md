@@ -344,7 +344,7 @@ You can see the workflow details in `.github/workflows/ci.yml`.
 ### CD Workflow (Publishing)
 
 The publishing workflow runs when:
-- A change is pushed to the main branch that modifies `package.json` or source code
+- Any change is pushed to the main branch (except documentation & config files)
 - A new GitHub release is created
 - Manually triggered via GitHub Actions interface
 
@@ -359,11 +359,11 @@ It performs the following steps:
 To use this workflow, you need to:
 1. Add an `NPM_TOKEN` secret to your GitHub repository settings
 2. Either:
-   - Push changes to the main branch (auto-versioning will handle the rest)
+   - Push code changes to the main branch (auto-versioning will handle the rest)
    - Manually trigger the workflow from the Actions tab
    - Create a GitHub release
 
-The workflow supports automatic version bumping when a version conflict is detected, making continuous delivery seamless.
+The workflow supports automatic version bumping when a version conflict is detected, making continuous delivery seamless without manual version management.
 
 You can see the workflow details in `.github/workflows/publish.yml`.
 
