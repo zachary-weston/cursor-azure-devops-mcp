@@ -148,8 +148,6 @@ If you encounter the error "server.setRequestHandler is not a function" or simil
 2. Try reinstalling the package: `npm install -g cursor-azure-devops-mcp`
 3. Check that your `.env` file is correctly set up with your Azure DevOps credentials
 
-> **Note**: Screenshots for setup will be provided in a future update.
-
 #### Option 2: SSE Mode (Alternative)
 
 **Note**: SSE mode is more prone to connection issues. If you're experiencing problems, please use Command mode instead.
@@ -176,8 +174,6 @@ The SSE mode connects to an HTTP server with Server-Sent Events:
    http://localhost:3000/sse
    ```
 8. Click "Add"
-
-> **Note**: Screenshots for setup will be provided in a future update.
 
 ### Windows Users
 
