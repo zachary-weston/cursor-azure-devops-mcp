@@ -6,6 +6,8 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
 import { azureDevOpsService } from './azure-devops-service.js';
 import { config } from './config.js';
+import { createServer } from 'http';
+import { configManager } from './config-manager.js';
 
 // Create Express app
 const app = express();

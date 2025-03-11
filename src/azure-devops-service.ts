@@ -12,7 +12,28 @@ import {
   PullRequestChanges,
   PullRequestCommentRequest,
   PullRequestCommentResponse,
+  PullRequestFileContent,
 } from './types.js';
+
+/**
+ * Helper function to safely stringify objects with circular references
+ */
+function safeStringify(obj: any): string {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, value) => {
+    // Skip _httpMessage, socket and similar properties that cause circular references
+    if (key === '_httpMessage' || key === 'socket' || key === 'connection' || key === 'agent') {
+      return '[Circular]';
+    }
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+      seen.add(value);
+    }
+    return value;
+  });
+}
 
 /**
  * Service for interacting with Azure DevOps API
@@ -462,7 +483,7 @@ class AzureDevOpsService {
     startPosition: number,
     length: number,
     project?: string
-  ): Promise<{ content: string; size: number; position: number; length: number }> {
+  ): Promise<PullRequestFileContent> {
     await this.initialize();
 
     if (!this.gitClient) {
@@ -477,20 +498,110 @@ class AzureDevOpsService {
     }
 
     try {
+      // Check if the file is binary first
+      if (this.isBinaryFile(filePath)) {
+        try {
+          // Get metadata about the file to know its full size
+          const item = await this.gitClient.getItem(repositoryId, filePath, projectName, objectId);
+
+          const fileSize = item?.contentMetadata?.contentLength || 0;
+
+          return {
+            content: `[Binary file not displayed - ${Math.round(fileSize / 1024)}KB]`,
+            size: fileSize,
+            position: startPosition,
+            length: 0,
+          };
+        } catch (error) {
+          console.error(`Error getting binary file info: ${error}`);
+          return {
+            content: '[Binary file - Unable to retrieve size information]',
+            size: 0,
+            position: startPosition,
+            length: 0,
+            error: `Failed to get binary file info: ${(error as Error).message}`,
+          };
+        }
+      }
+
       // Get metadata about the file to know its full size
       const item = await this.gitClient.getItem(repositoryId, filePath, projectName, objectId);
 
       const fileSize = item?.contentMetadata?.contentLength || 0;
 
-      // Get the specified chunk of content
-      const content = await this.gitClient.getItemText(
-        repositoryId,
-        filePath,
-        projectName,
-        objectId,
-        startPosition,
-        length
-      );
+      // Get the content - handle potential errors and circular references
+      let rawContent;
+      try {
+        rawContent = await this.gitClient.getItemText(
+          repositoryId,
+          filePath,
+          projectName,
+          objectId,
+          startPosition,
+          length
+        );
+      } catch (textError) {
+        console.error(`Error fetching file text: ${textError}`);
+        // If direct text access fails, try using the branch approach
+        try {
+          // Get the PR details to find the source branch
+          const pullRequest = await this.getPullRequestById(
+            repositoryId,
+            pullRequestId,
+            projectName
+          );
+
+          // Try the source branch first
+          if (pullRequest.sourceRefName) {
+            const branchResult = await this.getFileFromBranch(
+              repositoryId,
+              filePath,
+              pullRequest.sourceRefName,
+              startPosition,
+              length,
+              projectName
+            );
+
+            if (!branchResult.error) {
+              return branchResult;
+            }
+          }
+
+          // If source branch fails, try target branch
+          if (pullRequest.targetRefName) {
+            const branchResult = await this.getFileFromBranch(
+              repositoryId,
+              filePath,
+              pullRequest.targetRefName,
+              startPosition,
+              length,
+              projectName
+            );
+
+            if (!branchResult.error) {
+              return branchResult;
+            }
+          }
+
+          throw new Error('Failed to retrieve content using branch approach');
+        } catch (branchError) {
+          throw new Error(`Failed to retrieve content: ${(branchError as Error).message}`);
+        }
+      }
+
+      // Ensure content is a proper string
+      let content = '';
+      if (typeof rawContent === 'string') {
+        content = rawContent;
+      } else if (rawContent && typeof rawContent === 'object') {
+        // If it's an object but not a string, try to convert it safely
+        try {
+          content = safeStringify(rawContent);
+        } catch (stringifyError) {
+          console.error(`Error stringifying content: ${stringifyError}`);
+          content = '[Content could not be displayed due to format issues]';
+        }
+      }
 
       return {
         content,
@@ -500,7 +611,13 @@ class AzureDevOpsService {
       };
     } catch (error) {
       console.error(`Error getting file content for ${filePath}:`, error);
-      throw new Error(`Failed to retrieve content for file: ${filePath}`);
+      return {
+        content: '',
+        size: 0,
+        position: startPosition,
+        length: 0,
+        error: `Failed to retrieve content for file: ${filePath}. Error: ${(error as Error).message}`,
+      };
     }
   }
 
@@ -552,7 +669,7 @@ class AzureDevOpsService {
     startPosition = 0,
     length = 100000,
     project?: string
-  ): Promise<{ content: string; size: number; position: number; length: number; error?: string }> {
+  ): Promise<PullRequestFileContent> {
     await this.initialize();
 
     if (!this.gitClient) {
@@ -601,22 +718,72 @@ class AzureDevOpsService {
 
         const fileSize = item?.contentMetadata?.contentLength || 0;
 
-        // Get the content
-        const content = await this.gitClient.getItemText(
-          repositoryId,
-          filePath,
-          projectName,
-          undefined,
-          startPosition,
-          length,
-          {
-            versionDescriptor: {
-              version: commitId,
-              versionOptions: 0, // Use exact version
-              versionType: 1, // Commit
-            },
+        // Handle binary files
+        if (this.isBinaryFile(filePath)) {
+          return {
+            content: `[Binary file not displayed - ${Math.round(fileSize / 1024)}KB]`,
+            size: fileSize,
+            position: startPosition,
+            length: 0,
+            error: undefined,
+          };
+        }
+
+        // Get the content - carefully handle the response to prevent circular references
+        let rawContent;
+        try {
+          rawContent = await this.gitClient.getItemText(
+            repositoryId,
+            filePath,
+            projectName,
+            undefined,
+            startPosition,
+            length,
+            {
+              versionDescriptor: {
+                version: commitId,
+                versionOptions: 0, // Use exact version
+                versionType: 1, // Commit
+              },
+            }
+          );
+        } catch (textError) {
+          console.error(`Error fetching file text: ${textError}`);
+          // If getItemText fails, try to get content as Buffer and convert it
+          const contentBuffer = await this.gitClient.getItemContent(
+            repositoryId,
+            filePath,
+            projectName,
+            undefined,
+            {
+              versionDescriptor: {
+                version: commitId,
+                versionOptions: 0,
+                versionType: 1,
+              },
+            }
+          );
+
+          if (Buffer.isBuffer(contentBuffer)) {
+            rawContent = contentBuffer.toString('utf8');
+          } else {
+            throw new Error('Failed to retrieve file content in any format');
           }
-        );
+        }
+
+        // Ensure content is a proper string
+        let content = '';
+        if (typeof rawContent === 'string') {
+          content = rawContent;
+        } else if (rawContent && typeof rawContent === 'object') {
+          // If it's an object but not a string, try to convert it safely
+          try {
+            content = safeStringify(rawContent);
+          } catch (stringifyError) {
+            console.error(`Error stringifying content: ${stringifyError}`);
+            content = '[Content could not be displayed due to format issues]';
+          }
+        }
 
         return {
           content,
@@ -625,6 +792,7 @@ class AzureDevOpsService {
           length: content.length,
         };
       } catch (error) {
+        console.error(`Error getting file from branch: ${error}`);
         return {
           content: '',
           size: 0,

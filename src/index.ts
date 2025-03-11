@@ -5,11 +5,61 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { azureDevOpsService } from './azure-devops-service.js';
 import { configManager } from './config-manager.js';
+import { createConnection } from 'net';
+
+/**
+ * Helper function to safely handle response serialization
+ * preventing circular reference errors
+ */
+function safeResponse(result: any) {
+  // If the result is already a string, return it
+  if (typeof result === 'string') {
+    return result;
+  }
+
+  try {
+    // Try to JSON stringify normally first
+    return JSON.stringify(result, null, 2);
+  } catch (error) {
+    // If normal stringify fails, use a more robust approach
+    const seen = new WeakSet();
+    try {
+      return JSON.stringify(
+        result,
+        (key, value) => {
+          // Skip problematic keys that often cause circular references
+          if (
+            key === '_httpMessage' ||
+            key === 'socket' ||
+            key === 'connection' ||
+            key === 'agent'
+          ) {
+            return '[Circular]';
+          }
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]';
+            }
+            seen.add(value);
+          }
+          return value;
+        },
+        2
+      );
+    } catch (secondError) {
+      // If all else fails, convert to a simple error message
+      return JSON.stringify({
+        error: 'Failed to serialize response',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+}
 
 // Create MCP server
 const server = new McpServer({
   name: 'cursor-azure-devops-mcp',
-  version: '1.0.0',
+  version: '1.0.3',
   description: 'MCP Server for Azure DevOps integration with Cursor IDE',
 });
 
@@ -274,7 +324,7 @@ server.tool(
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2),
+          text: safeResponse(result),
         },
       ],
     };
@@ -309,7 +359,7 @@ server.tool(
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2),
+          text: safeResponse(result),
         },
       ],
     };
@@ -342,7 +392,7 @@ server.tool(
       content: [
         {
           type: 'text',
-          text: JSON.stringify(result, null, 2),
+          text: safeResponse(result),
         },
       ],
     };
