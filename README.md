@@ -216,6 +216,7 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_pull_request_threads` | Get threads from a pull request     | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
 | `azure_devops_work_item_attachments`| Get attachments for a work item     | `id` (number)                                                         |
 | `azure_devops_pull_request_changes` | Get detailed PR code changes        | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| `azure_devops_pull_request_file_content` | Get content of large files in chunks | `repositoryId` (string), `pullRequestId` (number), `filePath` (string), `objectId` (string), `startPosition` (number), `length` (number), `project` (string) |
 | `azure_devops_create_pr_comment`    | Create a comment on a pull request  | `repositoryId` (string), `pullRequestId` (number), `project` (string), `content` (string), and other optional parameters |
 
 ## Development

@@ -140,6 +140,12 @@ export interface PullRequestChange {
   changeType?: string; // Add, Edit, Delete
   originalContent?: string; // Content before change
   modifiedContent?: string; // Content after change
+  originalContentSize?: number; // Size of original file in bytes
+  modifiedContentSize?: number; // Size of modified file in bytes
+  originalContentPreview?: string; // Preview of content for large files
+  modifiedContentPreview?: string; // Preview of content for large files
+  isBinary?: boolean; // Whether the file is binary
+  isFolder?: boolean; // Whether the item is a folder
 }
 
 export interface PullRequestChanges {

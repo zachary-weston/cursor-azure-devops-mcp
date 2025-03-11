@@ -231,10 +231,49 @@ app.get('/sse', async (req, res) => {
         pullRequestId: z.number().describe('Pull request ID'),
         project: z.string().describe('Project name'),
       },
-      async ({ repositoryId, pullRequestId, project }) => {
+      async ({ repositoryId, pullRequestId, project }, { signal }) => {
+        signal.throwIfAborted();
         const result = await azureDevOpsService.getPullRequestChanges(
           repositoryId,
           pullRequestId,
+          project
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+    );
+
+    // New tool for getting content of large files in pull requests by chunks
+    server.tool(
+      'azure_devops_pull_request_file_content',
+      'Get content of a specific file in a pull request by chunks (for large files)',
+      {
+        repositoryId: z.string().describe('Repository ID'),
+        pullRequestId: z.number().describe('Pull request ID'),
+        filePath: z.string().describe('File path'),
+        objectId: z.string().describe('Object ID of the file version'),
+        startPosition: z.number().describe('Starting position in the file (bytes)'),
+        length: z.number().describe('Length to read (bytes)'),
+        project: z.string().describe('Project name'),
+      },
+      async (
+        { repositoryId, pullRequestId, filePath, objectId, startPosition, length, project },
+        { signal }
+      ) => {
+        signal.throwIfAborted();
+        const result = await azureDevOpsService.getPullRequestFileContent(
+          repositoryId,
+          pullRequestId,
+          filePath,
+          objectId,
+          startPosition,
+          length,
           project
         );
         return {

@@ -305,13 +305,21 @@ class AzureDevOpsService {
       projectName
     );
 
-    // Get detailed content for each change (with size limits for safety)
-    const MAX_FILE_SIZE = 100000; // Limit file size to 100KB for performance
+    // File size and content handling constants
+    const MAX_INLINE_FILE_SIZE = 500000; // Increased to 500KB for inline content
+    const MAX_CHUNK_SIZE = 100000; // 100KB chunks for larger files
+    const PREVIEW_SIZE = 10000; // 10KB preview for very large files
+
+    // Get detailed content for each change
     const enhancedChanges = await Promise.all(
       (changes.changeEntries || []).map(async (change: any) => {
         const filePath = change.item?.path || '';
         let originalContent = null;
         let modifiedContent = null;
+        let originalContentSize = 0;
+        let modifiedContentSize = 0;
+        let originalContentPreview = null;
+        let modifiedContentPreview = null;
 
         // Skip folders or binary files
         const isBinary = this.isBinaryFile(filePath);
@@ -322,21 +330,44 @@ class AzureDevOpsService {
             // Get original content if the file wasn't newly added
             if (change.changeType !== 'add' && change.originalObjectId) {
               try {
-                const originalItemContent = await this.gitClient.getItemContent(
+                // First get the item metadata to check file size
+                const originalItem = await this.gitClient.getItem(
                   repositoryId,
                   filePath,
                   projectName,
-                  change.originalObjectId,
-                  undefined,
-                  true,
-                  true
+                  change.originalObjectId
                 );
 
-                // Check if the content is too large
-                if (originalItemContent && originalItemContent.length < MAX_FILE_SIZE) {
+                originalContentSize = originalItem?.contentMetadata?.contentLength || 0;
+
+                // For files within the inline limit, get full content
+                if (originalContentSize <= MAX_INLINE_FILE_SIZE) {
+                  const originalItemContent = await this.gitClient.getItemContent(
+                    repositoryId,
+                    filePath,
+                    projectName,
+                    change.originalObjectId,
+                    undefined,
+                    true,
+                    true
+                  );
+
                   originalContent = originalItemContent.toString('utf8');
-                } else {
-                  originalContent = '(File too large to display)';
+                }
+                // For large files, get a preview
+                else {
+                  // Get just the beginning of the file for preview
+                  const previewContent = await this.gitClient.getItemText(
+                    repositoryId,
+                    filePath,
+                    projectName,
+                    change.originalObjectId,
+                    0, // Start at beginning
+                    PREVIEW_SIZE // Get preview bytes
+                  );
+
+                  originalContentPreview = previewContent;
+                  originalContent = `(File too large to display inline - ${Math.round(originalContentSize / 1024)}KB. Preview shown.)`;
                 }
               } catch (error) {
                 console.error(`Error getting original content for ${filePath}:`, error);
@@ -347,21 +378,44 @@ class AzureDevOpsService {
             // Get modified content if the file wasn't deleted
             if (change.changeType !== 'delete' && change.item.objectId) {
               try {
-                const modifiedItemContent = await this.gitClient.getItemContent(
+                // First get the item metadata to check file size
+                const modifiedItem = await this.gitClient.getItem(
                   repositoryId,
                   filePath,
                   projectName,
-                  change.item.objectId,
-                  undefined,
-                  true,
-                  true
+                  change.item.objectId
                 );
 
-                // Check if the content is too large
-                if (modifiedItemContent && modifiedItemContent.length < MAX_FILE_SIZE) {
+                modifiedContentSize = modifiedItem?.contentMetadata?.contentLength || 0;
+
+                // For files within the inline limit, get full content
+                if (modifiedContentSize <= MAX_INLINE_FILE_SIZE) {
+                  const modifiedItemContent = await this.gitClient.getItemContent(
+                    repositoryId,
+                    filePath,
+                    projectName,
+                    change.item.objectId,
+                    undefined,
+                    true,
+                    true
+                  );
+
                   modifiedContent = modifiedItemContent.toString('utf8');
-                } else {
-                  modifiedContent = '(File too large to display)';
+                }
+                // For large files, get a preview
+                else {
+                  // Get just the beginning of the file for preview
+                  const previewContent = await this.gitClient.getItemText(
+                    repositoryId,
+                    filePath,
+                    projectName,
+                    change.item.objectId,
+                    0, // Start at beginning
+                    PREVIEW_SIZE // Get preview bytes
+                  );
+
+                  modifiedContentPreview = previewContent;
+                  modifiedContent = `(File too large to display inline - ${Math.round(modifiedContentSize / 1024)}KB. Preview shown.)`;
                 }
               } catch (error) {
                 console.error(`Error getting modified content for ${filePath}:`, error);
@@ -378,6 +432,12 @@ class AzureDevOpsService {
           ...change,
           originalContent,
           modifiedContent,
+          originalContentSize,
+          modifiedContentSize,
+          originalContentPreview,
+          modifiedContentPreview,
+          isBinary,
+          isFolder,
         } as PullRequestChange;
 
         return enhancedChange;
@@ -388,6 +448,60 @@ class AzureDevOpsService {
       changeEntries: enhancedChanges,
       totalCount: enhancedChanges.length,
     };
+  }
+
+  /**
+   * Get content for a specific file in a pull request by chunks
+   * This allows retrieving parts of large files that can't be displayed inline
+   */
+  async getPullRequestFileContent(
+    repositoryId: string,
+    pullRequestId: number,
+    filePath: string,
+    objectId: string,
+    startPosition: number,
+    length: number,
+    project?: string
+  ): Promise<{ content: string; size: number; position: number; length: number }> {
+    await this.initialize();
+
+    if (!this.gitClient) {
+      throw new Error('Git client not initialized');
+    }
+
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
+
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+
+    try {
+      // Get metadata about the file to know its full size
+      const item = await this.gitClient.getItem(repositoryId, filePath, projectName, objectId);
+
+      const fileSize = item?.contentMetadata?.contentLength || 0;
+
+      // Get the specified chunk of content
+      const content = await this.gitClient.getItemText(
+        repositoryId,
+        filePath,
+        projectName,
+        objectId,
+        startPosition,
+        length
+      );
+
+      return {
+        content,
+        size: fileSize,
+        position: startPosition,
+        length: content.length,
+      };
+    } catch (error) {
+      console.error(`Error getting file content for ${filePath}:`, error);
+      throw new Error(`Failed to retrieve content for file: ${filePath}`);
+    }
   }
 
   /**

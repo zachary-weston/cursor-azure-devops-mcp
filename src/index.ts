@@ -269,6 +269,42 @@ server.tool(
       pullRequestId,
       project
     );
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+// New tool for getting content of large files in pull requests by chunks
+server.tool(
+  'azure_devops_pull_request_file_content',
+  'Get content of a specific file in a pull request by chunks (for large files)',
+  {
+    repositoryId: z.string().describe('Repository ID'),
+    pullRequestId: z.number().describe('Pull request ID'),
+    filePath: z.string().describe('File path'),
+    objectId: z.string().describe('Object ID of the file version'),
+    startPosition: z.number().describe('Starting position in the file (bytes)'),
+    length: z.number().describe('Length to read (bytes)'),
+    project: z.string().describe('Project name'),
+  },
+  async ({ repositoryId, pullRequestId, filePath, objectId, startPosition, length, project }) => {
+    const result = await azureDevOpsService.getPullRequestFileContent(
+      repositoryId,
+      pullRequestId,
+      filePath,
+      objectId,
+      startPosition,
+      length,
+      project
+    );
+
     return {
       content: [
         {
@@ -353,6 +389,9 @@ async function main() {
     console.error('- azure_devops_work_item_attachments: Get attachments for a work item');
     console.error(
       '- azure_devops_pull_request_changes: Get detailed code changes for a pull request'
+    );
+    console.error(
+      '- azure_devops_pull_request_file_content: Get content of a specific file in chunks (for large files)'
     );
     console.error('- azure_devops_create_pr_comment: Create a comment on a pull request');
   } catch (error) {
