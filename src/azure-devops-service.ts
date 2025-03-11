@@ -542,6 +542,110 @@ class AzureDevOpsService {
   }
 
   /**
+   * Helper method to get a file's content from a specific branch
+   * This is useful for accessing files in pull requests when direct object ID access fails
+   */
+  async getFileFromBranch(
+    repositoryId: string,
+    filePath: string,
+    branchName: string,
+    startPosition = 0,
+    length = 100000,
+    project?: string
+  ): Promise<{ content: string; size: number; position: number; length: number; error?: string }> {
+    await this.initialize();
+
+    if (!this.gitClient) {
+      throw new Error('Git client not initialized');
+    }
+
+    // Use the provided project or fall back to the default project
+    const projectName = project || this.defaultProject;
+
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+
+    try {
+      // Clean branch name (remove refs/heads/ if present)
+      const cleanBranchName = branchName.replace(/^refs\/heads\//, '');
+
+      // Get the branch reference to find the latest commit
+      const refs = await this.gitClient.getRefs(
+        repositoryId,
+        projectName,
+        `heads/${cleanBranchName}`
+      );
+
+      if (!refs || refs.length === 0) {
+        return {
+          content: '',
+          size: 0,
+          position: startPosition,
+          length: 0,
+          error: `Branch reference not found for ${cleanBranchName}`,
+        };
+      }
+
+      const commitId = refs[0].objectId;
+
+      // Get metadata about the file to know its full size
+      try {
+        const item = await this.gitClient.getItem(repositoryId, filePath, projectName, undefined, {
+          versionDescriptor: {
+            version: commitId,
+            versionOptions: 0, // Use exact version
+            versionType: 1, // Commit
+          },
+        });
+
+        const fileSize = item?.contentMetadata?.contentLength || 0;
+
+        // Get the content
+        const content = await this.gitClient.getItemText(
+          repositoryId,
+          filePath,
+          projectName,
+          undefined,
+          startPosition,
+          length,
+          {
+            versionDescriptor: {
+              version: commitId,
+              versionOptions: 0, // Use exact version
+              versionType: 1, // Commit
+            },
+          }
+        );
+
+        return {
+          content,
+          size: fileSize,
+          position: startPosition,
+          length: content.length,
+        };
+      } catch (error) {
+        return {
+          content: '',
+          size: 0,
+          position: startPosition,
+          length: 0,
+          error: `Failed to retrieve file from branch ${cleanBranchName}: ${(error as Error).message}`,
+        };
+      }
+    } catch (error) {
+      console.error(`Error accessing branch ${branchName}:`, error);
+      return {
+        content: '',
+        size: 0,
+        position: startPosition,
+        length: 0,
+        error: `Failed to access branch ${branchName}: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  /**
    * Create a comment on a pull request
    */
   async createPullRequestComment(

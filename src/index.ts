@@ -316,6 +316,39 @@ server.tool(
   }
 );
 
+// New tool for getting file content directly from a branch
+server.tool(
+  'azure_devops_branch_file_content',
+  'Get content of a file directly from a branch (helps with PR file access)',
+  {
+    repositoryId: z.string().describe('Repository ID'),
+    branchName: z.string().describe('Branch name'),
+    filePath: z.string().describe('File path'),
+    startPosition: z.number().describe('Starting position in the file (bytes)').default(0),
+    length: z.number().describe('Length to read (bytes)').default(100000),
+    project: z.string().describe('Project name'),
+  },
+  async ({ repositoryId, branchName, filePath, startPosition, length, project }) => {
+    const result = await azureDevOpsService.getFileFromBranch(
+      repositoryId,
+      filePath,
+      branchName,
+      startPosition,
+      length,
+      project
+    );
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  }
+);
+
 // New tool for creating pull request comments
 server.tool(
   'azure_devops_create_pr_comment',
@@ -392,6 +425,9 @@ async function main() {
     );
     console.error(
       '- azure_devops_pull_request_file_content: Get content of a specific file in chunks (for large files)'
+    );
+    console.error(
+      '- azure_devops_branch_file_content: Get content of a file directly from a branch'
     );
     console.error('- azure_devops_create_pr_comment: Create a comment on a pull request');
   } catch (error) {

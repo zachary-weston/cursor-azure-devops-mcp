@@ -178,3 +178,14 @@ export interface PullRequestCommentResponse {
   createdDate?: string;
   url?: string;
 }
+
+/**
+ * Response type for file content retrieval in pull requests
+ */
+export interface PullRequestFileContent {
+  content: string;
+  size: number;
+  position: number;
+  length: number;
+  error?: string;
+}
