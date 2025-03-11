@@ -216,25 +216,54 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_pull_request_threads` | Get threads from a pull request     | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
 | `azure_devops_work_item_attachments`| Get attachments for a work item     | `id` (number)                                                         |
 | `azure_devops_pull_request_changes` | Get detailed PR code changes        | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
-| `azure_devops_pull_request_file_content` | Get content of large files in chunks | `repositoryId` (string), `pullRequestId` (number), `filePath` (string), `objectId` (string), `startPosition` (number), `length` (number), `project` (string) |
-| `azure_devops_branch_file_content` | Get file content directly from a branch | `repositoryId` (string), `branchName` (string), `filePath` (string), `startPosition` (number), `length` (number), `project` (string) |
+| `azure_devops_pull_request_file_content` | Get content of a specific file in a pull request | `repositoryId` (string), `pullRequestId` (number), `filePath` (string), `objectId` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
+| `azure_devops_branch_file_content` | Get file content directly from a branch | `repositoryId` (string), `branchName` (string), `filePath` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
 | `azure_devops_create_pr_comment`    | Create a comment on a pull request  | `repositoryId` (string), `pullRequestId` (number), `project` (string), `content` (string), and other optional parameters |
 
 ### File Content Tools
 
 The file content tools (`azure_devops_pull_request_file_content` and `azure_devops_branch_file_content`) provide robust ways to access file content from repositories and pull requests:
 
+- **Complete file retrieval**: By default, returns the complete file as plain text (set `returnPlainText=true` or omit this parameter)
+- **Chunked access**: When `returnPlainText=false`, allows accessing large files in chunks by specifying start position and length
+- **Parallel chunk retrieval**: Large files are retrieved using multiple parallel requests for better performance
+- **5-minute timeout**: Extended timeout to ensure even large files can be retrieved completely
 - **Automatic fallback**: If direct object ID access fails, the system will try accessing by branch name
 - **Binary file detection**: Binary files are detected and handled appropriately
 - **Circular reference handling**: Prevents JSON serialization errors due to circular references
-- **Chunked access**: Large files can be accessed in chunks by specifying start position and length
 - **Error reporting**: Detailed error messages are provided when file access fails
+
+#### Example Usage:
+
+**Get complete file as plain text (default):**
+```json
+{
+  "repositoryId": "your-repo-id",
+  "pullRequestId": 123,
+  "filePath": "src/path/to/file.ts",
+  "objectId": "file-object-id",
+  "project": "YourProject"
+}
+```
+
+**Get file in chunks with metadata:**
+```json
+{
+  "repositoryId": "your-repo-id",
+  "branchName": "main",
+  "filePath": "src/path/to/file.ts",
+  "project": "YourProject",
+  "returnPlainText": false,
+  "startPosition": 0,
+  "length": 100000
+}
+```
 
 When accessing large files or files in complex repositories, you may need to:
 
-1. First try `azure_devops_pull_request_file_content` with the object ID from the PR changes
+1. First try `azure_devops_pull_request_file_content` with the object ID from the PR changes and default `returnPlainText=true` to get the complete file
 2. If that fails, use `azure_devops_branch_file_content` with the branch name from the PR details
-3. For very large files, break down your requests into smaller chunks
+3. For very large binary files, you may need to set `returnPlainText=false` and break down your requests into smaller chunks
 
 ## Development
 

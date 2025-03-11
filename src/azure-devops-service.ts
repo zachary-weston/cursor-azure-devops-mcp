@@ -472,152 +472,295 @@ class AzureDevOpsService {
   }
 
   /**
-   * Get content for a specific file in a pull request by chunks
-   * This allows retrieving parts of large files that can't be displayed inline
+   * Helper method to get the Git API client
    */
-  async getPullRequestFileContent(
-    repositoryId: string,
-    pullRequestId: number,
-    filePath: string,
-    objectId: string,
-    startPosition: number,
-    length: number,
-    project?: string
-  ): Promise<PullRequestFileContent> {
+  private async getGitApiClient() {
     await this.initialize();
 
     if (!this.gitClient) {
       throw new Error('Git client not initialized');
     }
 
-    // Use the provided project or fall back to the default project
-    const projectName = project || this.defaultProject;
+    return this.gitClient;
+  }
 
-    if (!projectName) {
-      throw new Error('Project name is required');
-    }
-
+  /**
+   * Retrieves complete file content by fetching chunks in parallel
+   * @param fetchChunk Function to fetch a single chunk of the file
+   * @returns Promise resolving to the complete file content as string
+   */
+  private async getCompleteFileContent(
+    fetchChunk: (startPosition: number, length: number) => Promise<PullRequestFileContent>
+  ): Promise<string> {
     try {
-      // Check if the file is binary first
-      if (this.isBinaryFile(filePath)) {
-        try {
-          // Get metadata about the file to know its full size
-          const item = await this.gitClient.getItem(repositoryId, filePath, projectName, objectId);
+      // First, fetch a tiny chunk to determine if it's binary and get content length
+      const initialChunk = await fetchChunk(0, 1024);
 
-          const fileSize = item?.contentMetadata?.contentLength || 0;
-
-          return {
-            content: `[Binary file not displayed - ${Math.round(fileSize / 1024)}KB]`,
-            size: fileSize,
-            position: startPosition,
-            length: 0,
-          };
-        } catch (error) {
-          console.error(`Error getting binary file info: ${error}`);
-          return {
-            content: '[Binary file - Unable to retrieve size information]',
-            size: 0,
-            position: startPosition,
-            length: 0,
-            error: `Failed to get binary file info: ${(error as Error).message}`,
-          };
-        }
+      if (initialChunk.isBinary) {
+        return `[Binary file content not displayed. File size: ${initialChunk.contentLength || initialChunk.size} bytes]`;
       }
 
-      // Get metadata about the file to know its full size
-      const item = await this.gitClient.getItem(repositoryId, filePath, projectName, objectId);
+      const contentLength = initialChunk.contentLength || initialChunk.size;
 
-      const fileSize = item?.contentMetadata?.contentLength || 0;
+      // If the file is small enough, return it directly
+      if (contentLength <= 100000) {
+        if (contentLength <= initialChunk.content.length) {
+          return initialChunk.content;
+        }
+        const fullContent = await fetchChunk(0, contentLength);
+        return fullContent.content;
+      }
 
-      // Get the content - handle potential errors and circular references
-      let rawContent;
+      // For larger files, fetch in parallel chunks
+      const totalLength = contentLength;
+      const CHUNK_SIZE = 100000; // 100KB chunks
+      const NUM_PARALLEL_REQUESTS = 5; // Number of parallel requests
+
+      const chunks: string[] = [];
+      let position = 0;
+
+      // Process the file in batches of parallel requests
+      while (position < totalLength) {
+        const chunkPromises: Promise<PullRequestFileContent>[] = [];
+
+        // Create batch of chunk requests
+        for (let i = 0; i < NUM_PARALLEL_REQUESTS && position < totalLength; i++) {
+          const chunkSize = Math.min(CHUNK_SIZE, totalLength - position);
+          chunkPromises.push(fetchChunk(position, chunkSize));
+          position += chunkSize;
+        }
+
+        // Wait for all chunks in this batch to be retrieved
+        const chunkResults = await Promise.all(chunkPromises);
+
+        // Add chunks to our collection in the correct order
+        for (const chunk of chunkResults) {
+          chunks.push(chunk.content);
+        }
+
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      return chunks.join('');
+    } catch (error) {
+      console.error('Error retrieving complete file content:', error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to retrieve complete file content: ${error.message}`);
+      } else {
+        throw new Error('Failed to retrieve complete file content due to an unknown error');
+      }
+    }
+  }
+
+  /**
+   * Get the content of a file in a pull request
+   */
+  async getPullRequestFileContent(
+    repositoryId: string,
+    pullRequestId: number,
+    filePath: string,
+    objectId: string,
+    startPosition = 0,
+    length = 100000,
+    project?: string
+  ): Promise<PullRequestFileContent> {
+    try {
+      const gitClient = await this.getGitApiClient();
+      const projectName = project || this.defaultProject;
+
+      if (!projectName) {
+        throw new Error('Project name is required but not provided');
+      }
+
+      // Check if this is likely a binary file
+      const isBinaryFile = this.isBinaryFile(filePath);
+
       try {
-        rawContent = await this.gitClient.getItemText(
+        // Get the content with range
+        const content = await gitClient.getBlobContent(
           repositoryId,
-          filePath,
-          projectName,
           objectId,
-          startPosition,
-          length
+          projectName,
+          undefined, // download
+          undefined, // scopePath
+          {
+            startPosition: startPosition,
+            endPosition: startPosition + length - 1,
+          }
         );
-      } catch (textError) {
-        console.error(`Error fetching file text: ${textError}`);
-        // If direct text access fails, try using the branch approach
+
+        // Check if we got a Buffer
+        let contentStr = '';
+        let contentSize = 0;
+        let totalContentLength = 0;
+
+        if (Buffer.isBuffer(content)) {
+          contentSize = content.length;
+
+          // Attempt to get the total file size by requesting the file metadata
+          try {
+            const fileInfo = await gitClient.getBlobsZip(repositoryId, [objectId], projectName);
+
+            // This may not give us the exact size, but we'll try to estimate
+            totalContentLength = fileInfo?._response?.bodyAsText?.length || contentSize;
+          } catch (error) {
+            // If we can't get the total size, use the current chunk size or try another method
+            totalContentLength = contentSize;
+          }
+
+          if (isBinaryFile) {
+            contentStr = '[Binary content]';
+          } else {
+            try {
+              contentStr = content.toString('utf8');
+            } catch (error) {
+              contentStr = '[Error converting content to string]';
+            }
+          }
+        } else if (typeof content === 'string') {
+          contentStr = content;
+          contentSize = contentStr.length;
+          totalContentLength = contentSize;
+        } else if (content === null || content === undefined) {
+          contentStr = '';
+          contentSize = 0;
+          totalContentLength = 0;
+        } else {
+          // In case we got some other type
+          try {
+            contentStr = safeStringify(content);
+            contentSize = contentStr.length;
+            totalContentLength = contentSize;
+          } catch (error) {
+            contentStr = '[Error: could not serialize content]';
+            contentSize = contentStr.length;
+            totalContentLength = contentSize;
+          }
+        }
+
+        return {
+          content: contentStr,
+          size: totalContentLength,
+          position: startPosition,
+          length: contentSize,
+          isBinary: isBinaryFile,
+          contentLength: totalContentLength,
+        };
+      } catch (error) {
+        console.error('Error getting content directly:', error);
+
+        // Fallback to branch access if direct objectId access fails
         try {
-          // Get the PR details to find the source branch
-          const pullRequest = await this.getPullRequestById(
-            repositoryId,
+          // Get the pull request details to find the source branch
+          const pullRequest = await gitClient.getPullRequestById(
             pullRequestId,
+            repositoryId,
             projectName
           );
 
-          // Try the source branch first
-          if (pullRequest.sourceRefName) {
-            const branchResult = await this.getFileFromBranch(
-              repositoryId,
-              filePath,
-              pullRequest.sourceRefName,
-              startPosition,
-              length,
-              projectName
-            );
-
-            if (!branchResult.error) {
-              return branchResult;
-            }
+          if (!pullRequest || !pullRequest.sourceRefName) {
+            throw new Error('Could not determine source branch for pull request');
           }
 
-          // If source branch fails, try target branch
-          if (pullRequest.targetRefName) {
-            const branchResult = await this.getFileFromBranch(
-              repositoryId,
-              filePath,
-              pullRequest.targetRefName,
-              startPosition,
-              length,
-              projectName
-            );
+          // Extract branch name from ref (remove 'refs/heads/' prefix)
+          const branchName = pullRequest.sourceRefName.replace(/^refs\/heads\//, '');
 
-            if (!branchResult.error) {
-              return branchResult;
-            }
-          }
-
-          throw new Error('Failed to retrieve content using branch approach');
-        } catch (branchError) {
-          throw new Error(`Failed to retrieve content: ${(branchError as Error).message}`);
+          // Use the getFileFromBranch method as a fallback
+          console.log(`Falling back to branch access for ${filePath} using branch ${branchName}`);
+          return await this.getFileFromBranch(
+            repositoryId,
+            filePath,
+            branchName,
+            startPosition,
+            length,
+            projectName
+          );
+        } catch (fallbackError) {
+          console.error('Fallback to branch access also failed:', fallbackError);
+          return {
+            content: '',
+            size: 0,
+            position: startPosition,
+            length: 0,
+            error: `Failed to retrieve content for file: ${filePath}. Direct access and branch fallback both failed.`,
+            isBinary: false,
+            contentLength: 0,
+          };
         }
       }
-
-      // Ensure content is a proper string
-      let content = '';
-      if (typeof rawContent === 'string') {
-        content = rawContent;
-      } else if (rawContent && typeof rawContent === 'object') {
-        // If it's an object but not a string, try to convert it safely
-        try {
-          content = safeStringify(rawContent);
-        } catch (stringifyError) {
-          console.error(`Error stringifying content: ${stringifyError}`);
-          content = '[Content could not be displayed due to format issues]';
-        }
-      }
-
-      return {
-        content,
-        size: fileSize,
-        position: startPosition,
-        length: content.length,
-      };
     } catch (error) {
-      console.error(`Error getting file content for ${filePath}:`, error);
+      console.error('Error in getPullRequestFileContent:', error);
       return {
         content: '',
         size: 0,
         position: startPosition,
         length: 0,
-        error: `Failed to retrieve content for file: ${filePath}. Error: ${(error as Error).message}`,
+        error: `Failed to retrieve content: ${error instanceof Error ? error.message : String(error)}`,
+        isBinary: false,
+        contentLength: 0,
       };
+    }
+  }
+
+  /**
+   * Get the complete content of a file from a pull request, automatically handling chunking
+   * This simplifies access to large files by combining chunks internally
+   */
+  async getCompletePullRequestFileContent(
+    repositoryId: string,
+    pullRequestId: number,
+    filePath: string,
+    objectId: string,
+    project?: string
+  ): Promise<string> {
+    // Check if this is a binary file before proceeding
+    if (this.isBinaryFile(filePath)) {
+      return `[Binary file - content cannot be displayed as text]`;
+    }
+
+    try {
+      const content = await this.getCompleteFileContent((startPosition, length) =>
+        this.getPullRequestFileContent(
+          repositoryId,
+          pullRequestId,
+          filePath,
+          objectId,
+          startPosition,
+          length,
+          project
+        )
+      );
+      return content;
+    } catch (error) {
+      console.error('Error retrieving complete pull request file content:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the complete content of a file from a branch, automatically handling chunking
+   * This simplifies access to large files by combining chunks internally
+   */
+  async getCompleteFileFromBranch(
+    repositoryId: string,
+    filePath: string,
+    branchName: string,
+    project?: string
+  ): Promise<string> {
+    // Check if this is a binary file before proceeding
+    if (this.isBinaryFile(filePath)) {
+      return `[Binary file - content cannot be displayed as text]`;
+    }
+
+    try {
+      const content = await this.getCompleteFileContent((startPosition, length) =>
+        this.getFileFromBranch(repositoryId, filePath, branchName, startPosition, length, project)
+      );
+      return content;
+    } catch (error) {
+      console.error('Error retrieving complete branch file content:', error);
+      throw error;
     }
   }
 
@@ -670,146 +813,139 @@ class AzureDevOpsService {
     length = 100000,
     project?: string
   ): Promise<PullRequestFileContent> {
-    await this.initialize();
-
-    if (!this.gitClient) {
-      throw new Error('Git client not initialized');
-    }
-
-    // Use the provided project or fall back to the default project
-    const projectName = project || this.defaultProject;
-
-    if (!projectName) {
-      throw new Error('Project name is required');
-    }
-
     try {
-      // Clean branch name (remove refs/heads/ if present)
-      const cleanBranchName = branchName.replace(/^refs\/heads\//, '');
+      const gitClient = await this.getGitApiClient();
+      const projectName = project || this.defaultProject;
 
-      // Get the branch reference to find the latest commit
-      const refs = await this.gitClient.getRefs(
-        repositoryId,
-        projectName,
-        `heads/${cleanBranchName}`
-      );
-
-      if (!refs || refs.length === 0) {
-        return {
-          content: '',
-          size: 0,
-          position: startPosition,
-          length: 0,
-          error: `Branch reference not found for ${cleanBranchName}`,
-        };
+      if (!projectName) {
+        throw new Error('Project name is required but not provided');
       }
 
-      const commitId = refs[0].objectId;
+      // Check if this is likely a binary file
+      const isBinaryFile = this.isBinaryFile(filePath);
 
-      // Get metadata about the file to know its full size
       try {
-        const item = await this.gitClient.getItem(repositoryId, filePath, projectName, undefined, {
-          versionDescriptor: {
-            version: commitId,
-            versionOptions: 0, // Use exact version
-            versionType: 1, // Commit
-          },
-        });
+        // Attempt to get the item by path
+        const gitItem = await gitClient.getItem(
+          repositoryId,
+          filePath,
+          projectName,
+          undefined, // version
+          undefined, // versionOptions
+          undefined, // versionType
+          undefined, // includeContent
+          undefined, // latestProcessedChange
+          branchName, // versionDescriptor
+          undefined // includeContentMetadata
+        );
 
-        const fileSize = item?.contentMetadata?.contentLength || 0;
-
-        // Handle binary files
-        if (this.isBinaryFile(filePath)) {
-          return {
-            content: `[Binary file not displayed - ${Math.round(fileSize / 1024)}KB]`,
-            size: fileSize,
-            position: startPosition,
-            length: 0,
-            error: undefined,
-          };
+        if (!gitItem || !gitItem.objectId) {
+          throw new Error(`File not found at path: ${filePath}`);
         }
 
-        // Get the content - carefully handle the response to prevent circular references
-        let rawContent;
-        try {
-          rawContent = await this.gitClient.getItemText(
-            repositoryId,
-            filePath,
-            projectName,
-            undefined,
-            startPosition,
-            length,
-            {
-              versionDescriptor: {
-                version: commitId,
-                versionOptions: 0, // Use exact version
-                versionType: 1, // Commit
-              },
-            }
-          );
-        } catch (textError) {
-          console.error(`Error fetching file text: ${textError}`);
-          // If getItemText fails, try to get content as Buffer and convert it
-          const contentBuffer = await this.gitClient.getItemContent(
-            repositoryId,
-            filePath,
-            projectName,
-            undefined,
-            {
-              versionDescriptor: {
-                version: commitId,
-                versionOptions: 0,
-                versionType: 1,
-              },
-            }
-          );
-
-          if (Buffer.isBuffer(contentBuffer)) {
-            rawContent = contentBuffer.toString('utf8');
-          } else {
-            throw new Error('Failed to retrieve file content in any format');
+        // Get the content with range
+        const content = await gitClient.getItemContent(
+          repositoryId,
+          filePath,
+          projectName,
+          undefined, // version
+          undefined, // versionOptions
+          undefined, // versionType
+          branchName, // versionDescriptor
+          undefined, // download
+          undefined, // includeContent
+          undefined, // latestProcessedChange
+          {
+            startPosition: startPosition,
+            endPosition: startPosition + length - 1,
           }
-        }
+        );
 
-        // Ensure content is a proper string
-        let content = '';
-        if (typeof rawContent === 'string') {
-          content = rawContent;
-        } else if (rawContent && typeof rawContent === 'object') {
-          // If it's an object but not a string, try to convert it safely
+        // Check if we got a Buffer
+        let contentStr = '';
+        let contentSize = 0;
+        let totalContentLength = 0;
+
+        if (Buffer.isBuffer(content)) {
+          contentSize = content.length;
+
+          // Attempt to get the total file size by requesting the file without content
           try {
-            content = safeStringify(rawContent);
-          } catch (stringifyError) {
-            console.error(`Error stringifying content: ${stringifyError}`);
-            content = '[Content could not be displayed due to format issues]';
+            const fileInfo = await gitClient.getItem(
+              repositoryId,
+              filePath,
+              projectName,
+              undefined,
+              undefined,
+              undefined,
+              undefined, // Don't request content
+              undefined,
+              branchName,
+              true // includeContentMetadata
+            );
+
+            totalContentLength = fileInfo.contentMetadata?.contentLength || contentSize;
+          } catch (error) {
+            // If we can't get the total size, use the current chunk size
+            totalContentLength = contentSize;
+          }
+
+          if (isBinaryFile) {
+            contentStr = '[Binary content]';
+          } else {
+            try {
+              contentStr = content.toString('utf8');
+            } catch (error) {
+              contentStr = '[Error converting content to string]';
+            }
+          }
+        } else if (typeof content === 'string') {
+          contentStr = content;
+          contentSize = contentStr.length;
+          totalContentLength = contentSize;
+        } else if (content === null || content === undefined) {
+          contentStr = '';
+          contentSize = 0;
+          totalContentLength = 0;
+        } else {
+          // In case we got some other type
+          try {
+            contentStr = safeStringify(content);
+            contentSize = contentStr.length;
+            totalContentLength = contentSize;
+          } catch (error) {
+            contentStr = '[Error: could not serialize content]';
+            contentSize = contentStr.length;
+            totalContentLength = contentSize;
           }
         }
 
         return {
-          content,
-          size: fileSize,
+          content: contentStr,
+          size: totalContentLength,
           position: startPosition,
-          length: content.length,
+          length: contentSize,
+          isBinary: isBinaryFile,
+          contentLength: totalContentLength,
         };
       } catch (error) {
-        console.error(`Error getting file from branch: ${error}`);
+        // Log the error for debugging
+        console.error('Error in getFileFromBranch:', error);
+
+        // Return a structured error response
         return {
           content: '',
           size: 0,
           position: startPosition,
           length: 0,
-          error: `Failed to retrieve file from branch ${cleanBranchName}: ${(error as Error).message}`,
+          error: error instanceof Error ? error.message : String(error),
+          isBinary: false,
+          contentLength: 0,
         };
       }
     } catch (error) {
-      console.error(`Error accessing branch ${branchName}:`, error);
-      return {
-        content: '',
-        size: 0,
-        position: startPosition,
-        length: 0,
-        error: `Failed to access branch ${branchName}: ${(error as Error).message}`,
-      };
+      console.error('Error in getFileFromBranch:', error);
+      throw error;
     }
   }
 

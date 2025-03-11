@@ -188,4 +188,6 @@ export interface PullRequestFileContent {
   position: number;
   length: number;
   error?: string;
+  isBinary?: boolean;
+  contentLength?: number; // Total content length for the file
 }

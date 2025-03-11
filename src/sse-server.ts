@@ -8,10 +8,22 @@ import { azureDevOpsService } from './azure-devops-service.js';
 import { config } from './config.js';
 import { createServer } from 'http';
 import { configManager } from './config-manager.js';
+import { safeResponse } from './index.js';
+import { EventEmitter } from 'events';
+
+// Extend EventEmitter to allow more listeners
+EventEmitter.defaultMaxListeners = 100;
 
 // Create Express app
 const app = express();
 const PORT = config.server.port;
+
+// Define interface for MCP tools
+interface McpTool {
+  description: string;
+  parameters: Record<string, { description: string; type: string }>;
+  handler: (params: any) => Promise<any>;
+}
 
 // Define a type that extends McpServer to include transport property
 interface ExtendedMcpServer extends McpServer {
@@ -244,120 +256,222 @@ app.get('/sse', async (req, res) => {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result, null, 2),
+              text: safeResponse(result),
             },
           ],
         };
       }
     );
 
-    // New tool for getting content of large files in pull requests by chunks
-    server.tool(
-      'azure_devops_pull_request_file_content',
-      'Get content of a specific file in a pull request by chunks (for large files)',
-      {
-        repositoryId: z.string().describe('Repository ID'),
-        pullRequestId: z.number().describe('Pull request ID'),
-        filePath: z.string().describe('File path'),
-        objectId: z.string().describe('Object ID of the file version'),
-        startPosition: z.number().describe('Starting position in the file (bytes)'),
-        length: z.number().describe('Length to read (bytes)'),
-        project: z.string().describe('Project name'),
-      },
-      async (
-        { repositoryId, pullRequestId, filePath, objectId, startPosition, length, project },
-        { signal }
-      ) => {
-        signal.throwIfAborted();
-        const result = await azureDevOpsService.getPullRequestFileContent(
-          repositoryId,
-          pullRequestId,
-          filePath,
-          objectId,
-          startPosition,
-          length,
-          project
-        );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-    );
+    // Main server tools
+    const serverTools: Record<string, McpTool> = {
+      azure_devops_pull_request_file_content: {
+        description:
+          'Get the content of a specific file in a pull request. By default returns the complete file as plain text. Set returnPlainText=false to get content in chunks with metadata. Has a 5-minute timeout for large files.',
+        parameters: {
+          repositoryId: {
+            description: 'Repository ID',
+            type: 'string',
+          },
+          pullRequestId: {
+            description: 'Pull request ID',
+            type: 'number',
+          },
+          filePath: {
+            description: 'File path',
+            type: 'string',
+          },
+          objectId: {
+            description: 'Object ID of the file version',
+            type: 'string',
+          },
+          startPosition: {
+            description:
+              'Starting position in the file (bytes) - only used when returnPlainText=false',
+            type: 'number',
+          },
+          length: {
+            description: 'Length to read (bytes) - only used when returnPlainText=false',
+            type: 'number',
+          },
+          project: {
+            description: 'Project name',
+            type: 'string',
+          },
+          returnPlainText: {
+            description:
+              'When true (default), returns complete file as plain text; when false, returns JSON with chunk details',
+            type: 'boolean',
+          },
+        },
+        handler: async (params: any) => {
+          try {
+            const {
+              repositoryId,
+              pullRequestId,
+              filePath,
+              objectId,
+              startPosition = 0,
+              length = 100000,
+              project,
+              returnPlainText = true,
+            } = params;
 
-    // New tool for getting file content directly from a branch
-    server.tool(
-      'azure_devops_branch_file_content',
-      'Get content of a file directly from a branch (helps with PR file access)',
-      {
-        repositoryId: z.string().describe('Repository ID'),
-        branchName: z.string().describe('Branch name'),
-        filePath: z.string().describe('File path'),
-        startPosition: z.number().describe('Starting position in the file (bytes)').default(0),
-        length: z.number().describe('Length to read (bytes)').default(100000),
-        project: z.string().describe('Project name'),
-      },
-      async (
-        { repositoryId, branchName, filePath, startPosition, length, project },
-        { signal }
-      ) => {
-        signal.throwIfAborted();
-        const result = await azureDevOpsService.getFileFromBranch(
-          repositoryId,
-          filePath,
-          branchName,
-          startPosition,
-          length,
-          project
-        );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-    );
+            // Set a timeout for the operation (5 minutes)
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Request timed out after 5 minutes')), 300000);
+            });
 
-    // New tool for creating pull request comments
-    server.tool(
-      'azure_devops_create_pr_comment',
-      'Create a comment on a pull request',
-      {
-        repositoryId: z.string().describe('Repository ID'),
-        pullRequestId: z.number().describe('Pull request ID'),
-        project: z.string().describe('Project name'),
-        content: z.string().describe('Comment text'),
-        threadId: z.number().optional().describe('Thread ID (if adding to existing thread)'),
-        filePath: z.string().optional().describe('File path (if commenting on a file)'),
-        lineNumber: z
-          .number()
-          .optional()
-          .describe('Line number (if commenting on a specific line)'),
-        parentCommentId: z
-          .number()
-          .optional()
-          .describe('Parent comment ID (if replying to a comment)'),
-        status: z.string().optional().describe('Comment status (e.g., "active", "fixed")'),
+            if (returnPlainText) {
+              // Get the complete file content
+              const contentPromise = azureDevOpsService.getCompletePullRequestFileContent(
+                repositoryId,
+                pullRequestId,
+                filePath,
+                objectId,
+                project
+              );
+
+              // Race against timeout
+              const content = (await Promise.race([contentPromise, timeoutPromise])) as string;
+
+              // Return in the proper MCP format
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: content,
+                  },
+                ],
+              };
+            } else {
+              // Get the file content in chunks with metadata
+              const resultPromise = azureDevOpsService.getPullRequestFileContent(
+                repositoryId,
+                pullRequestId,
+                filePath,
+                objectId,
+                startPosition,
+                length,
+                project
+              );
+
+              // Race against timeout
+              const result = await Promise.race([resultPromise, timeoutPromise]);
+
+              return JSON.stringify(result);
+            }
+          } catch (error) {
+            console.error('Error retrieving PR file content:', error);
+            if (error instanceof Error) {
+              return JSON.stringify({ error: error.message });
+            }
+            return JSON.stringify({ error: 'Failed to retrieve PR file content' });
+          }
+        },
       },
-      async params => {
-        const result = await azureDevOpsService.createPullRequestComment(params);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-    );
+
+      azure_devops_branch_file_content: {
+        description:
+          'Get the content of a file directly from a branch. By default returns the complete file as plain text. Set returnPlainText=false to get content in chunks with metadata. Has a 5-minute timeout for large files.',
+        parameters: {
+          repositoryId: {
+            description: 'Repository ID',
+            type: 'string',
+          },
+          branchName: {
+            description: 'Branch name',
+            type: 'string',
+          },
+          filePath: {
+            description: 'File path',
+            type: 'string',
+          },
+          startPosition: {
+            description:
+              'Starting position in the file (bytes) - only used when returnPlainText=false',
+            type: 'number',
+          },
+          length: {
+            description: 'Length to read (bytes) - only used when returnPlainText=false',
+            type: 'number',
+          },
+          project: {
+            description: 'Project name',
+            type: 'string',
+          },
+          returnPlainText: {
+            description:
+              'When true (default), returns complete file as plain text; when false, returns JSON with chunk details',
+            type: 'boolean',
+          },
+        },
+        handler: async (params: any) => {
+          try {
+            const {
+              repositoryId,
+              branchName,
+              filePath,
+              startPosition = 0,
+              length = 100000,
+              project,
+              returnPlainText = true,
+            } = params;
+
+            // Set a timeout for the operation (5 minutes)
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Request timed out after 5 minutes')), 300000);
+            });
+
+            if (returnPlainText) {
+              // Get the complete file content
+              const contentPromise = azureDevOpsService.getCompleteFileFromBranch(
+                repositoryId,
+                filePath,
+                branchName,
+                project
+              );
+
+              // Race against timeout
+              const content = (await Promise.race([contentPromise, timeoutPromise])) as string;
+
+              // Return in the proper MCP format
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: content,
+                  },
+                ],
+              };
+            } else {
+              // Get the file content in chunks with metadata
+              const resultPromise = azureDevOpsService.getFileFromBranch(
+                repositoryId,
+                filePath,
+                branchName,
+                startPosition,
+                length,
+                project
+              );
+
+              // Race against timeout
+              const result = await Promise.race([resultPromise, timeoutPromise]);
+
+              return JSON.stringify(result);
+            }
+          } catch (error) {
+            console.error('Error retrieving branch file content:', error);
+            if (error instanceof Error) {
+              return JSON.stringify({ error: error.message });
+            }
+            return JSON.stringify({ error: 'Failed to retrieve branch file content' });
+          }
+        },
+      },
+
+      // ... other tools ...
+    };
 
     // Handle server close
     server.closeHandler = () => {
