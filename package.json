@@ -1,6 +1,6 @@
 {
   "name": "cursor-azure-devops-mcp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "MCP Server for Cursor IDE-Azure DevOps Integration",
   "main": "build/index.js",
   "type": "module",

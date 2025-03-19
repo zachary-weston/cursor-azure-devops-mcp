@@ -325,17 +325,18 @@ class AzureDevOpsService {
 
     // Filter for work item link relations (exclude attachments and hyperlinks)
     const linkRelations = workItem.relations.filter(
-      (relation: any) => relation.rel.includes('Link') &&
+      (relation: any) =>
+        relation.rel.includes('Link') &&
         relation.rel !== 'AttachedFile' &&
         relation.rel !== 'Hyperlink'
     );
 
     // Group relations by relationship type
     const groupedRelations: Record<string, WorkItemLink[]> = {};
-    
+
     linkRelations.forEach((relation: any) => {
       const relType = relation.rel;
-      
+
       // Extract work item ID from URL
       // URL format is typically like: https://dev.azure.com/{org}/{project}/_apis/wit/workItems/{id}
       let targetId = 0;
@@ -345,17 +346,17 @@ class AzureDevOpsService {
       } catch (error) {
         console.error('Failed to extract work item ID from URL:', relation.url);
       }
-      
+
       if (!groupedRelations[relType]) {
         groupedRelations[relType] = [];
       }
-      
+
       const workItemLink: WorkItemLink = {
         ...relation,
         targetId,
-        title: relation.attributes?.name || `Work Item ${targetId}`
+        title: relation.attributes?.name || `Work Item ${targetId}`,
       };
-      
+
       groupedRelations[relType].push(workItemLink);
     });
 
@@ -376,10 +377,10 @@ class AzureDevOpsService {
 
     // First get all links
     const linkGroups = await this.getWorkItemLinks(workItemId);
-    
+
     // Extract all target IDs from all link groups
     const linkedIds: number[] = [];
-    
+
     Object.values(linkGroups).forEach(links => {
       links.forEach(link => {
         if (link.targetId > 0) {
@@ -387,12 +388,12 @@ class AzureDevOpsService {
         }
       });
     });
-    
+
     // If no linked items found, return empty array
     if (linkedIds.length === 0) {
       return [];
     }
-    
+
     // Get the full work item details for all linked items
     const linkedWorkItems = await this.getWorkItems(linkedIds);
     return linkedWorkItems;
