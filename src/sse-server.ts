@@ -236,6 +236,46 @@ app.get('/sse', async (req, res) => {
       }
     );
 
+    // New tool for work item links
+    server.tool(
+      'azure_devops_work_item_links',
+      'Get links for a specific work item',
+      {
+        id: z.number().describe('Work item ID'),
+      },
+      async ({ id }) => {
+        const result = await azureDevOpsService.getWorkItemLinks(id);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+    );
+
+    // New tool for linked work items with full details
+    server.tool(
+      'azure_devops_linked_work_items',
+      'Get all linked work items with their full details',
+      {
+        id: z.number().describe('Work item ID'),
+      },
+      async ({ id }) => {
+        const result = await azureDevOpsService.getLinkedWorkItems(id);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+    );
+
     // New tool for pull request changes with file contents
     server.tool(
       'azure_devops_pull_request_changes',

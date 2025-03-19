@@ -428,6 +428,46 @@ server.tool(
   }
 );
 
+// New tool for work item links
+server.tool(
+  'azure_devops_work_item_links',
+  'Get links for a specific work item',
+  {
+    id: z.number().describe('Work item ID'),
+  },
+  async ({ id }) => {
+    const result = await azureDevOpsService.getWorkItemLinks(id);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+// New tool for linked work items with full details
+server.tool(
+  'azure_devops_linked_work_items',
+  'Get all linked work items with their full details',
+  {
+    id: z.number().describe('Work item ID'),
+  },
+  async ({ id }) => {
+    const result = await azureDevOpsService.getLinkedWorkItems(id);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  }
+);
+
 // New tool for pull request changes with file contents
 server.tool(
   'azure_devops_pull_request_changes',
@@ -708,6 +748,10 @@ async function main() {
     console.error('- azure_devops_pull_request_by_id: Get a pull request by ID');
     console.error('- azure_devops_pull_request_threads: Get threads (comments) for a pull request');
     console.error('- azure_devops_work_item_attachments: Get attachments for a work item');
+    console.error('- azure_devops_work_item_links: Get links for a work item');
+    console.error(
+      '- azure_devops_linked_work_items: Get all linked work items with their full details'
+    );
     console.error(
       '- azure_devops_pull_request_changes: Get detailed code changes for a pull request'
     );

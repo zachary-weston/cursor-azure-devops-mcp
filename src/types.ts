@@ -30,6 +30,12 @@ export interface WorkItemRelation {
   attributes?: Record<string, any>;
 }
 
+// Azure DevOps Work Item Link (Extended from WorkItemRelation)
+export interface WorkItemLink extends WorkItemRelation {
+  targetId: number; // The ID of the target work item
+  title?: string;   // Optional title of the target work item
+}
+
 // Azure DevOps Git Repository
 export interface GitRepository {
   id: string;

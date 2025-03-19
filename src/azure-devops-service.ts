@@ -13,6 +13,8 @@ import {
   PullRequestCommentRequest,
   PullRequestCommentResponse,
   PullRequestFileContent,
+  WorkItemRelation,
+  WorkItemLink,
 } from './types.js';
 
 /**
@@ -295,6 +297,105 @@ class AzureDevOpsService {
     });
 
     return attachments;
+  }
+
+  /**
+   * Get all links associated with a work item (parent, child, related, etc.)
+   * @param workItemId The ID of the work item
+   * @returns Object with work item links grouped by relationship type
+   */
+  async getWorkItemLinks(workItemId: number): Promise<Record<string, WorkItemLink[]>> {
+    await this.initialize();
+
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    // Get work item with relations
+    const workItem = await this.workItemClient.getWorkItem(
+      workItemId,
+      undefined,
+      undefined,
+      4 // 4 = WorkItemExpand.Relations in the SDK
+    );
+
+    if (!workItem || !workItem.relations) {
+      return {};
+    }
+
+    // Filter for work item link relations (exclude attachments and hyperlinks)
+    const linkRelations = workItem.relations.filter(
+      (relation: any) => relation.rel.includes('Link') &&
+        relation.rel !== 'AttachedFile' &&
+        relation.rel !== 'Hyperlink'
+    );
+
+    // Group relations by relationship type
+    const groupedRelations: Record<string, WorkItemLink[]> = {};
+    
+    linkRelations.forEach((relation: any) => {
+      const relType = relation.rel;
+      
+      // Extract work item ID from URL
+      // URL format is typically like: https://dev.azure.com/{org}/{project}/_apis/wit/workItems/{id}
+      let targetId = 0;
+      try {
+        const urlParts = relation.url.split('/');
+        targetId = parseInt(urlParts[urlParts.length - 1], 10);
+      } catch (error) {
+        console.error('Failed to extract work item ID from URL:', relation.url);
+      }
+      
+      if (!groupedRelations[relType]) {
+        groupedRelations[relType] = [];
+      }
+      
+      const workItemLink: WorkItemLink = {
+        ...relation,
+        targetId,
+        title: relation.attributes?.name || `Work Item ${targetId}`
+      };
+      
+      groupedRelations[relType].push(workItemLink);
+    });
+
+    return groupedRelations;
+  }
+
+  /**
+   * Get all linked work items with their full details
+   * @param workItemId The ID of the work item to get links from
+   * @returns Array of work items that are linked to the specified work item
+   */
+  async getLinkedWorkItems(workItemId: number): Promise<WorkItem[]> {
+    await this.initialize();
+
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    // First get all links
+    const linkGroups = await this.getWorkItemLinks(workItemId);
+    
+    // Extract all target IDs from all link groups
+    const linkedIds: number[] = [];
+    
+    Object.values(linkGroups).forEach(links => {
+      links.forEach(link => {
+        if (link.targetId > 0) {
+          linkedIds.push(link.targetId);
+        }
+      });
+    });
+    
+    // If no linked items found, return empty array
+    if (linkedIds.length === 0) {
+      return [];
+    }
+    
+    // Get the full work item details for all linked items
+    const linkedWorkItems = await this.getWorkItems(linkedIds);
+    return linkedWorkItems;
   }
 
   /**
