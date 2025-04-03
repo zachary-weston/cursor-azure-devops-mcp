@@ -705,6 +705,38 @@ server.tool(
   }
 );
 
+// New tool for work item comments
+server.tool(
+  'azure_devops_work_item_comments',
+  'Get comments for a specific work item',
+  {
+    id: z.number().describe('Work item ID'),
+  },
+  async ({ id }) => {
+    try {
+      const result = await azureDevOpsService.getWorkItemComments(id);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(`Error executing azure_devops_work_item_comments for ID ${id}:`, error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
+      };
+    }
+  }
+);
+
 // Start server
 async function main() {
   // Load configuration from all sources (command line, IDE settings, env vars, defaults)
@@ -762,6 +794,7 @@ async function main() {
       '- azure_devops_branch_file_content: Get content of a file directly from a branch'
     );
     console.error('- azure_devops_create_pr_comment: Create a comment on a pull request');
+    console.error('- azure_devops_work_item_comments: Get comments for a specific work item');
   } catch (error) {
     console.error('Error starting server:', error);
     process.exit(1);

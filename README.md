@@ -17,6 +17,7 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 - Get pull requests for a repository
 - View pull request details and threads
 - Retrieve work item attachments (images, PDFs, and other files)
+- Get work item comments with metadata (including mentions and reactions)
 - Get detailed code changes for pull requests (view file contents before and after changes)
 - Create comments on pull requests (with support for replying to existing comments)
 
@@ -215,6 +216,7 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_pull_request_by_id`   | Get a specific pull request         | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
 | `azure_devops_pull_request_threads` | Get threads from a pull request     | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
 | `azure_devops_work_item_attachments`| Get attachments for a work item     | `id` (number)                                                         |
+| `azure_devops_work_item_comments`   | Get comments for a work item        | `id` (number)                                                         |
 | `azure_devops_pull_request_changes` | Get detailed PR code changes        | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
 | `azure_devops_pull_request_file_content` | Get content of a specific file in a pull request | `repositoryId` (string), `pullRequestId` (number), `filePath` (string), `objectId` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
 | `azure_devops_branch_file_content` | Get file content directly from a branch | `repositoryId` (string), `branchName` (string), `filePath` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |

@@ -303,6 +303,26 @@ app.get('/sse', async (req, res) => {
       }
     );
 
+    // New tool for work item comments
+    server.tool(
+      'azure_devops_work_item_comments',
+      'Get comments for a specific work item',
+      {
+        id: z.number().describe('Work item ID'),
+      },
+      async ({ id }) => {
+        const result = await azureDevOpsService.getWorkItemComments(id);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+    );
+
     // Main server tools
     const serverTools: Record<string, McpTool> = {
       azure_devops_pull_request_file_content: {

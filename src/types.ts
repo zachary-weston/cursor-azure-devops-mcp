@@ -197,3 +197,38 @@ export interface PullRequestFileContent {
   isBinary?: boolean;
   contentLength?: number; // Total content length for the file
 }
+
+// Work Item Comment
+export interface WorkItemComment {
+  id: number;
+  workItemId: number;
+  text: string;
+  createdBy: {
+    displayName: string;
+    id: string;
+    uniqueName: string;
+  };
+  createdDate: string;
+  modifiedDate?: string;
+  mentions?: {
+    id: string;
+    displayName: string;
+    uniqueName: string;
+  }[];
+  reactions?: {
+    type: string;
+    count: number;
+    users: {
+      id: string;
+      displayName: string;
+    }[];
+  }[];
+}
+
+// Work Item Comments Response
+export interface WorkItemCommentsResponse {
+  totalCount: number;
+  count: number;
+  comments: WorkItemComment[];
+  error?: string; // Optional error message if something went wrong
+}

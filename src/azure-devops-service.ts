@@ -15,6 +15,7 @@ import {
   PullRequestFileContent,
   WorkItemRelation,
   WorkItemLink,
+  WorkItemCommentsResponse,
 } from './types.js';
 
 /**
@@ -297,6 +298,89 @@ class AzureDevOpsService {
     });
 
     return attachments;
+  }
+
+  /**
+   * Get comments for a specific work item
+   * @param workItemId The ID of the work item
+   * @returns Array of comments with their metadata
+   */
+  async getWorkItemComments(workItemId: number): Promise<WorkItemCommentsResponse> {
+    await this.initialize();
+
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    try {
+      // First get the work item to determine its project
+      const workItem = await this.getWorkItem(workItemId);
+      if (!workItem || !workItem.fields) {
+        throw new Error('Work item not found or invalid');
+      }
+
+      // Get the project from the work item's fields
+      const projectId = workItem.fields['System.TeamProject'];
+      if (!projectId) {
+        throw new Error('Could not determine project for work item');
+      }
+
+      // Get comments for the work item using the discussions API
+      const comments = await this.workItemClient.getComments(projectId, workItemId);
+
+      if (!comments) {
+        return {
+          totalCount: 0,
+          count: 0,
+          comments: [],
+        };
+      }
+
+      // Process comments and their metadata
+      const processedComments = (comments.comments || []).map((comment: any) => ({
+        id: comment.id || 0,
+        workItemId,
+        text: comment.text || '',
+        createdBy: {
+          displayName: comment.createdBy?.displayName || 'Unknown',
+          id: comment.createdBy?.id || '',
+          uniqueName: comment.createdBy?.uniqueName || '',
+        },
+        createdDate: comment.createdDate || new Date().toISOString(),
+        modifiedDate: comment.modifiedDate,
+        mentions:
+          comment.mentions?.map((mention: any) => ({
+            id: mention.id || '',
+            displayName: mention.displayName || '',
+            uniqueName: mention.uniqueName || '',
+          })) || [],
+        reactions:
+          comment.reactions?.map((reaction: any) => ({
+            type: reaction.type || '',
+            count: reaction.count || 0,
+            users:
+              reaction.users?.map((user: any) => ({
+                id: user.id || '',
+                displayName: user.displayName || '',
+              })) || [],
+          })) || [],
+      }));
+
+      return {
+        totalCount: comments.totalCount || processedComments.length,
+        count: processedComments.length,
+        comments: processedComments,
+      };
+    } catch (error) {
+      console.error(`Error getting comments for work item ${workItemId}:`, error);
+      // Return empty response instead of throwing error
+      return {
+        totalCount: 0,
+        count: 0,
+        comments: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   /**
