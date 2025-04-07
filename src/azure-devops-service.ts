@@ -196,11 +196,22 @@ class AzureDevOpsService {
       throw new Error('Project name is required');
     }
 
-    const pullRequest = await this.gitClient.getPullRequestById(
-      pullRequestId,
-      repositoryId,
-      projectName
+    // Get all pull requests for the repository with all statuses
+    const pullRequests = await this.gitClient.getPullRequests(repositoryId, {
+      project: projectName,
+      status: 'all',
+      includeLinks: true,
+    });
+
+    // Find the specific pull request
+    const pullRequest = pullRequests.find(
+      (pr: GitPullRequest) => pr.pullRequestId === pullRequestId
     );
+
+    if (!pullRequest) {
+      throw new Error(`Pull request ${pullRequestId} not found in repository ${repositoryId}`);
+    }
+
     return pullRequest;
   }
 
