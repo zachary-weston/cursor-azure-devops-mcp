@@ -20,6 +20,47 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 - Get work item comments with metadata (including mentions and reactions)
 - Get detailed code changes for pull requests (view file contents before and after changes)
 - Create comments on pull requests (with support for replying to existing comments)
+- Test Plan Management:
+  - List all test plans in a project
+  - Get test plan details by ID
+  - List test suites in a test plan
+  - Get test suite details by ID
+  - List test cases in a test suite
+- Smart Response Handling:
+  - Automatic truncation of large responses to fit AI model limits
+  - Preservation of essential fields in truncated responses
+  - Metadata about truncation status and original size
+- Project Configuration:
+  - Default project support from configuration
+  - Fallback to configuration when project is not specified
+  - Proper error handling for missing project information
+
+## Changelog
+
+### Version 1.0.3
+
+#### Added
+- Test Plan Management Support:
+  - New tool: `azure_devops_test_plans` - List all test plans for a project
+  - New tool: `azure_devops_test_plan` - Get a test plan by ID
+  - New tool: `azure_devops_test_suites` - List all test suites for a test plan
+  - New tool: `azure_devops_test_suite` - Get a test suite by ID
+  - New tool: `azure_devops_test_cases` - List all test cases for a test suite
+
+#### Enhanced
+- Response Size Management:
+  - Added intelligent response truncation (max 50KB by default)
+  - Preserved essential fields in truncated responses
+  - Added truncation metadata in responses
+- Project Configuration:
+  - Added support for default project from configuration
+  - Improved project parameter handling in all test-related methods
+  - Added proper error handling for missing project information
+
+#### Fixed
+- Parameter ordering in test suite methods to comply with TypeScript requirements
+- Error handling improvements in test-related API calls
+- Response formatting for large test suite responses
 
 ## Installation
 
@@ -186,7 +227,8 @@ cmd /k npx cursor-azure-devops-mcp
 
 ### mcp.json installation
 
-```
+```json
+{
     "azure-devops": {
       "command": "cmd",
       "args": [
@@ -201,6 +243,7 @@ cmd /k npx cursor-azure-devops-mcp
         "your-project"
       ]
     }
+}
 ```
 
 ### Using in Your Code
@@ -225,148 +268,76 @@ registerTools(server, azureDevOpsService);
 
 ## Available Tools
 
-| Tool Name                           | Description                         | Required Parameters                                                   |
-| ----------------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
-| `azure_devops_projects`             | Get all projects                    | None                                                                  |
-| `azure_devops_work_item`            | Get a specific work item            | `id` (number)                                                         |
-| `azure_devops_work_items`           | Get multiple work items             | `ids` (array of numbers)                                              |
-| `azure_devops_repositories`         | Get repositories for a project      | `project` (string)                                                    |
-| `azure_devops_pull_requests`        | Get pull requests from a repository | `repositoryId` (string), `project` (string)                           |
-| `azure_devops_pull_request_by_id`   | Get a specific pull request         | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
-| `azure_devops_pull_request_threads` | Get threads from a pull request     | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
-| `azure_devops_work_item_attachments`| Get attachments for a work item     | `id` (number)                                                         |
-| `azure_devops_work_item_comments`   | Get comments for a work item        | `id` (number)                                                         |
-| `azure_devops_pull_request_changes` | Get detailed PR code changes        | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| Tool Name | Description | Required Parameters |
+|-----------|-------------|-------------------|
+| `azure_devops_projects` | Get all projects | None |
+| `azure_devops_work_item` | Get a specific work item | `id` (number) |
+| `azure_devops_work_items` | Get multiple work items | `ids` (array of numbers) |
+| `azure_devops_repositories` | Get repositories for a project | `project` (string) |
+| `azure_devops_pull_requests` | Get pull requests from a repository | `repositoryId` (string), `project` (string) |
+| `azure_devops_pull_request_by_id` | Get a specific pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| `azure_devops_pull_request_threads` | Get threads from a pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| `azure_devops_work_item_attachments` | Get attachments for a work item | `id` (number) |
+| `azure_devops_work_item_comments` | Get comments for a work item | `id` (number) |
+| `azure_devops_pull_request_changes` | Get detailed PR code changes | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
 | `azure_devops_pull_request_file_content` | Get content of a specific file in a pull request | `repositoryId` (string), `pullRequestId` (number), `filePath` (string), `objectId` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
 | `azure_devops_branch_file_content` | Get file content directly from a branch | `repositoryId` (string), `branchName` (string), `filePath` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
-| `azure_devops_create_pr_comment`    | Create a comment on a pull request  | `repositoryId` (string), `pullRequestId` (number), `project` (string), `content` (string), and other optional parameters |
+| `azure_devops_create_pr_comment` | Create a comment on a pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string), `content` (string), and other optional parameters |
+| `azure_devops_test_plans` | List all test plans for a project | `project` (string) |
+| `azure_devops_test_plan` | Get a test plan by ID | `project` (string), `testPlanId` (number) |
+| `azure_devops_test_suites` | List all test suites for a test plan | `project` (string), `testPlanId` (number) |
+| `azure_devops_test_suite` | Get a test suite by ID | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
+| `azure_devops_test_cases` | List all test cases for a test suite | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
 
-### File Content Tools
+### Test Management Tools
 
-The file content tools (`azure_devops_pull_request_file_content` and `azure_devops_branch_file_content`) provide robust ways to access file content from repositories and pull requests:
+The test management tools provide comprehensive access to Azure DevOps test plans, suites, and cases:
 
-- **Complete file retrieval**: By default, returns the complete file as plain text (set `returnPlainText=true` or omit this parameter)
-- **Chunked access**: When `returnPlainText=false`, allows accessing large files in chunks by specifying start position and length
-- **Parallel chunk retrieval**: Large files are retrieved using multiple parallel requests for better performance
-- **5-minute timeout**: Extended timeout to ensure even large files can be retrieved completely
-- **Automatic fallback**: If direct object ID access fails, the system will try accessing by branch name
-- **Binary file detection**: Binary files are detected and handled appropriately
-- **Circular reference handling**: Prevents JSON serialization errors due to circular references
-- **Error reporting**: Detailed error messages are provided when file access fails
+- **Automatic Project Handling**: All test tools support using the default project from configuration
+- **Smart Response Truncation**: Large responses are automatically truncated to fit AI model limits while preserving essential information
+- **Metadata Preservation**: Even in truncated responses, important metadata like IDs, names, and relationships are preserved
+- **Error Handling**: Comprehensive error handling with detailed error messages
 
 #### Example Usage:
 
-**Get complete file as plain text (default):**
+**List all test plans in a project:**
 ```json
 {
-  "repositoryId": "your-repo-id",
-  "pullRequestId": 123,
-  "filePath": "src/path/to/file.ts",
-  "objectId": "file-object-id",
   "project": "YourProject"
 }
 ```
 
-**Get file in chunks with metadata:**
+**Get a specific test suite:**
 ```json
 {
-  "repositoryId": "your-repo-id",
-  "branchName": "main",
-  "filePath": "src/path/to/file.ts",
   "project": "YourProject",
-  "returnPlainText": false,
-  "startPosition": 0,
-  "length": 100000
+  "testPlanId": 185735,
+  "testSuiteId": 186771
 }
 ```
 
-When accessing large files or files in complex repositories, you may need to:
+**List test cases in a suite:**
+```json
+{
+  "project": "YourProject",
+  "testPlanId": 185735,
+  "testSuiteId": 186771
+}
+```
 
-1. First try `azure_devops_pull_request_file_content` with the object ID from the PR changes and default `returnPlainText=true` to get the complete file
-2. If that fails, use `azure_devops_branch_file_content` with the branch name from the PR details
-3. For very large binary files, you may need to set `returnPlainText=false` and break down your requests into smaller chunks
+When working with test management tools, you should:
 
-## Development
+1. First retrieve the test plans for your project using `azure_devops_test_plans`
+2. Use a specific test plan ID to get test suites with `azure_devops_test_suites`
+3. Finally, get test cases for a specific suite using `azure_devops_test_cases`
 
-### Prerequisites
-
-- Node.js 18 or higher
-- npm or yarn
-- Azure DevOps account with a personal access token
-
-### Setup
-
-1. Clone the repository
-
-   ```bash
-   git clone https://github.com/yourusername/cursor-azure-devops-mcp.git
-   cd cursor-azure-devops-mcp
-   ```
-
-2. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file with your Azure DevOps credentials
-
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Build the TypeScript code
-   ```bash
-   npm run build
-   ```
-
-5. Start the development server
-   ```bash
-   npm run dev
-   ```
-
-### Code Quality
-
-The project uses ESLint and Prettier to maintain code quality and consistent formatting:
-
-1. Format code using Prettier:
-   ```bash
-   npm run format
-   ```
-
-2. Check if code is properly formatted:
-   ```bash
-   npm run format:check
-   ```
-
-3. Lint code using ESLint:
-   ```bash
-   npm run lint
-   ```
-
-4. Fix auto-fixable linting issues:
-   ```bash
-   npm run lint:fix
-   ```
-
-5. Run both format check and linting:
-   ```bash
-   npm run check
-   ```
-
-### TypeScript Implementation
-
-This project is implemented in TypeScript using the latest MCP SDK features:
-
-- Uses ESM modules for better compatibility
-- Leverages Zod for schema validation
-- Provides proper type definitions
-- Follows modern JavaScript/TypeScript best practices
-
-### Testing
-
-To test the connection to Azure DevOps:
-
-```bash
-npm run test-connection
+The response format includes truncation metadata when necessary:
+```json
+{
+  "items": [...],
+  "totalCount": 100,
+  "isTruncated": true,
+  "truncatedCount": 80,
+  "message": "Response was truncated. Showing 20 of 100 items."
+}
 ```

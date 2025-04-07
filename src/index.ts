@@ -737,6 +737,170 @@ server.tool(
   }
 );
 
+// Test Plans
+server.tool(
+  'azure_devops_test_plans',
+  'List all test plans for a project',
+  {
+    project: z.string().describe('Project name'),
+  },
+  async ({ project }) => {
+    try {
+      const result = await azureDevOpsService.getTestPlans(project);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      console.error('Error executing azure_devops_test_plans:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
+      };
+    }
+  }
+);
+
+server.tool(
+  'azure_devops_test_plan',
+  'Get a test plan by ID',
+  {
+    project: z.string().describe('Project name'),
+    testPlanId: z.number().describe('Test plan ID'),
+  },
+  async ({ project, testPlanId }) => {
+    try {
+      const result = await azureDevOpsService.getTestPlan(project, testPlanId);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      console.error('Error executing azure_devops_test_plan:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
+      };
+    }
+  }
+);
+
+// Test Suites
+server.tool(
+  'azure_devops_test_suites',
+  'List all test suites for a test plan',
+  {
+    project: z.string().describe('Project name'),
+    testPlanId: z.number().describe('Test plan ID'),
+  },
+  async ({ project, testPlanId }) => {
+    try {
+      const result = await azureDevOpsService.getTestSuites(testPlanId, project);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      console.error('Error executing azure_devops_test_suites:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
+      };
+    }
+  }
+);
+
+server.tool(
+  'azure_devops_test_suite',
+  'Get a test suite by ID',
+  {
+    project: z.string().describe('Project name'),
+    testPlanId: z.number().describe('Test plan ID'),
+    testSuiteId: z.number().describe('Test suite ID'),
+  },
+  async ({ project, testPlanId, testSuiteId }) => {
+    try {
+      const result = await azureDevOpsService.getTestSuite(project, testPlanId, testSuiteId);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      console.error('Error executing azure_devops_test_suite:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
+      };
+    }
+  }
+);
+
+// Test Cases
+server.tool(
+  'azure_devops_test_cases',
+  'List all test cases for a test suite',
+  {
+    project: z.string().describe('Project name'),
+    testPlanId: z.number().describe('Test plan ID'),
+    testSuiteId: z.number().describe('Test suite ID'),
+  },
+  async ({ project, testPlanId, testSuiteId }) => {
+    try {
+      const result = await azureDevOpsService.getTestCases(project, testPlanId, testSuiteId);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      console.error('Error executing azure_devops_test_cases:', error);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ error: String(error) }, null, 2),
+          },
+        ],
+      };
+    }
+  }
+);
+
 // Start server
 async function main() {
   // Load configuration from all sources (command line, IDE settings, env vars, defaults)
@@ -795,6 +959,11 @@ async function main() {
     );
     console.error('- azure_devops_create_pr_comment: Create a comment on a pull request');
     console.error('- azure_devops_work_item_comments: Get comments for a specific work item');
+    console.error('- azure_devops_test_plans: List all test plans for a project');
+    console.error('- azure_devops_test_plan: Get a test plan by ID');
+    console.error('- azure_devops_test_suites: List all test suites for a test plan');
+    console.error('- azure_devops_test_suite: Get a test suite by ID');
+    console.error('- azure_devops_test_cases: List all test cases for a test suite');
   } catch (error) {
     console.error('Error starting server:', error);
     process.exit(1);

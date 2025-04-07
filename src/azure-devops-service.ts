@@ -46,6 +46,7 @@ class AzureDevOpsService {
   private projectClient: any = null;
   private workItemClient: any = null;
   private gitClient: any = null;
+  private testPlanClient: any = null;
   private defaultProject: string | undefined;
 
   constructor(connection?: azdev.WebApi, defaultProject?: string) {
@@ -83,6 +84,7 @@ class AzureDevOpsService {
     this.projectClient = await this.connection.getCoreApi();
     this.workItemClient = await this.connection.getWorkItemTrackingApi();
     this.gitClient = await this.connection.getGitApi();
+    this.testPlanClient = await this.connection.getTestPlanApi();
   }
 
   /**
@@ -241,7 +243,7 @@ class AzureDevOpsService {
    * @returns Object containing all initialized clients
    */
   getClients(): ApiClients {
-    if (!this.projectClient || !this.workItemClient || !this.gitClient) {
+    if (!this.projectClient || !this.workItemClient || !this.gitClient || !this.testPlanClient) {
       throw new Error('API clients not initialized. Call initialize() first.');
     }
 
@@ -249,6 +251,7 @@ class AzureDevOpsService {
       projectClient: this.projectClient,
       workItemClient: this.workItemClient,
       gitClient: this.gitClient,
+      testPlanClient: this.testPlanClient,
     };
   }
 
@@ -1264,6 +1267,247 @@ class AzureDevOpsService {
       throw new Error(
         `Failed to create comment: ${error instanceof Error ? error.message : String(error)}`
       );
+    }
+  }
+
+  /**
+   * Helper function to truncate large response objects
+   * @param obj The object to truncate
+   * @param maxSize Maximum size in bytes (default 50KB)
+   * @returns Truncated object with metadata
+   */
+  private truncateResponse(obj: any, maxSize: number = 50000): any {
+    const stringified = safeStringify(obj);
+
+    if (stringified.length <= maxSize) {
+      return obj;
+    }
+
+    // For arrays, truncate to fewer items
+    if (Array.isArray(obj)) {
+      const truncated = obj.slice(
+        0,
+        Math.max(1, Math.floor(obj.length * (maxSize / stringified.length)))
+      );
+      return {
+        items: truncated,
+        totalCount: obj.length,
+        isTruncated: true,
+        truncatedCount: obj.length - truncated.length,
+        message: `Response was truncated. Showing ${truncated.length} of ${obj.length} items.`,
+      };
+    }
+
+    // For objects, try to keep essential fields and truncate nested content
+    const truncated: any = {};
+    let currentSize = 0;
+    const essentialFields = ['id', 'name', 'url', 'project', 'state', 'createdBy', 'createdDate'];
+
+    // First, keep all essential fields
+    essentialFields.forEach(field => {
+      if (obj[field] !== undefined) {
+        truncated[field] = obj[field];
+        currentSize += safeStringify(obj[field]).length;
+      }
+    });
+
+    // Then add other fields until we reach size limit
+    Object.entries(obj).forEach(([key, value]) => {
+      if (!essentialFields.includes(key)) {
+        const valueSize = safeStringify(value).length;
+        if (currentSize + valueSize <= maxSize) {
+          truncated[key] = value;
+          currentSize += valueSize;
+        }
+      }
+    });
+
+    return {
+      ...truncated,
+      isTruncated: true,
+      originalSize: stringified.length,
+      truncatedSize: currentSize,
+      message: 'Response was truncated to fit size limits. Essential information is preserved.',
+    };
+  }
+
+  /**
+   * Get test suites for a project and test plan
+   */
+  async getTestSuites(testPlanId: number, project?: string): Promise<any[]> {
+    await this.initialize();
+
+    try {
+      if (!this.testPlanClient) {
+        this.testPlanClient = await this.connection!.getTestPlanApi();
+      }
+
+      // Use provided project or default project from config
+      const projectName = project || this.defaultProject;
+      if (!projectName) {
+        throw new Error('Project name is required but not provided in parameters or configuration');
+      }
+
+      console.log(`Fetching test suites for project ${projectName} and plan ${testPlanId}`);
+      const testSuites = await this.testPlanClient.getTestSuitesForPlan(projectName, testPlanId);
+
+      if (!testSuites) {
+        console.log('No test suites returned from API');
+        return [];
+      }
+
+      return this.truncateResponse(testSuites);
+    } catch (error) {
+      console.error('Error getting test suites:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get test suite by ID
+   */
+  async getTestSuite(
+    project: string | undefined,
+    testPlanId: number,
+    testSuiteId: number
+  ): Promise<any> {
+    await this.initialize();
+
+    try {
+      if (!this.testPlanClient) {
+        this.testPlanClient = await this.connection!.getTestPlanApi();
+      }
+
+      // Use provided project or default project from config
+      const projectName = project || this.defaultProject;
+      if (!projectName) {
+        throw new Error('Project name is required but not provided in parameters or configuration');
+      }
+
+      console.log(
+        `Fetching test suite ${testSuiteId} from project ${projectName} and plan ${testPlanId}`
+      );
+      const testSuite = await this.testPlanClient.getTestSuiteById(
+        projectName,
+        testPlanId,
+        testSuiteId
+      );
+
+      if (!testSuite) {
+        console.log('No test suite found with the specified ID');
+        throw new Error(`Test suite ${testSuiteId} not found`);
+      }
+
+      return this.truncateResponse(testSuite);
+    } catch (error) {
+      console.error('Error getting test suite:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get test cases for a test suite
+   */
+  async getTestCases(
+    project: string | undefined,
+    testPlanId: number,
+    testSuiteId: number
+  ): Promise<any[]> {
+    await this.initialize();
+
+    try {
+      if (!this.testPlanClient) {
+        this.testPlanClient = await this.connection!.getTestPlanApi();
+      }
+
+      // Use provided project or default project from config
+      const projectName = project || this.defaultProject;
+      if (!projectName) {
+        throw new Error('Project name is required but not provided in parameters or configuration');
+      }
+
+      console.log(
+        `Fetching test cases for suite ${testSuiteId} in project ${projectName} and plan ${testPlanId}`
+      );
+      const testCases = await this.testPlanClient.getTestCaseList(
+        projectName,
+        testPlanId,
+        testSuiteId
+      );
+
+      if (!testCases) {
+        console.log('No test cases returned from API');
+        return [];
+      }
+
+      return this.truncateResponse(testCases);
+    } catch (error) {
+      console.error('Error getting test cases:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get test plans for a project
+   */
+  async getTestPlans(project?: string): Promise<any[]> {
+    await this.initialize();
+
+    try {
+      if (!this.testPlanClient) {
+        this.testPlanClient = await this.connection!.getTestPlanApi();
+      }
+
+      // Use provided project or default project from config
+      const projectName = project || this.defaultProject;
+      if (!projectName) {
+        throw new Error('Project name is required but not provided in parameters or configuration');
+      }
+
+      console.log(`Fetching test plans for project ${projectName}`);
+      const testPlans = await this.testPlanClient.getTestPlans(projectName);
+
+      if (!testPlans) {
+        console.log('No test plans returned from API');
+        return [];
+      }
+
+      return this.truncateResponse(testPlans);
+    } catch (error) {
+      console.error('Error getting test plans:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get test plan by ID
+   */
+  async getTestPlan(project: string | undefined, testPlanId: number): Promise<any> {
+    await this.initialize();
+
+    try {
+      if (!this.testPlanClient) {
+        this.testPlanClient = await this.connection!.getTestPlanApi();
+      }
+
+      // Use provided project or default project from config
+      const projectName = project || this.defaultProject;
+      if (!projectName) {
+        throw new Error('Project name is required but not provided in parameters or configuration');
+      }
+
+      console.log(`Fetching test plan ${testPlanId} from project ${projectName}`);
+      const testPlan = await this.testPlanClient.getTestPlanById(projectName, testPlanId);
+
+      if (!testPlan) {
+        console.log('No test plan found with the specified ID');
+        throw new Error(`Test plan ${testPlanId} not found`);
+      }
+
+      return this.truncateResponse(testPlan);
+    } catch (error) {
+      console.error('Error getting test plan:', error);
+      throw error;
     }
   }
 }

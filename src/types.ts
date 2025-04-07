@@ -117,6 +117,7 @@ export interface ApiClients {
   projectClient: any;
   workItemClient: any;
   gitClient: any;
+  testPlanClient: any;
 }
 
 // Work Item Attachment
