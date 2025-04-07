@@ -188,54 +188,49 @@ const server = new McpServer({
 });
 
 // Register Azure DevOps tools
-server.tool('azure_devops_projects', 'List all projects', {}, async () => {
-  try {
-    const result = await azureDevOpsService.getProjects();
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  } catch (error) {
-    console.error('Error executing azure_devops_projects:', error);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ error: String(error) }, null, 2),
-        },
-      ],
-    };
+server.tool(
+  'azure_devops_projects',
+  'List all Azure DevOps projects in your organization. Returns project details including ID, name, description, visibility, and state. Results are automatically truncated if they exceed size limits.',
+  {},
+  async () => {
+    try {
+      const result = await azureDevOpsService.getProjects();
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
   }
-});
+);
 
 server.tool(
   'azure_devops_work_item',
-  'Get a work item by ID',
+  'Get detailed information about a specific work item by ID. Returns work item fields, relations, history, and metadata. Supports all work item types (bugs, tasks, user stories, etc).',
   {
-    id: z.number().describe('Work item ID'),
+    id: z.number().describe('The ID of the work item to retrieve'),
   },
   async ({ id }) => {
     try {
       const result = await azureDevOpsService.getWorkItem(id);
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: safeResponse(result) }],
       };
     } catch (error) {
-      console.error(`Error executing azure_devops_work_item for ID ${id}:`, error);
       return {
+        isError: true,
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2),
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
       };
@@ -245,28 +240,27 @@ server.tool(
 
 server.tool(
   'azure_devops_work_items',
-  'Get multiple work items by IDs',
+  'Get detailed information for multiple work items by their IDs. Returns complete work item data including fields, relations, history, and metadata for each item. Useful for bulk retrieval of work items. Response is automatically truncated if it exceeds size limits while preserving essential data.',
   {
-    ids: z.array(z.number()).describe('Array of work item IDs'),
+    ids: z
+      .array(z.number())
+      .describe(
+        'Array of work item IDs to retrieve. Each ID should be a valid work item identifier.'
+      ),
   },
   async ({ ids }) => {
     try {
       const result = await azureDevOpsService.getWorkItems(ids);
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: safeResponse(result) }],
       };
     } catch (error) {
-      console.error(`Error executing azure_devops_work_items for IDs ${ids.join(', ')}:`, error);
       return {
+        isError: true,
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2),
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
       };
@@ -276,31 +270,28 @@ server.tool(
 
 server.tool(
   'azure_devops_repositories',
-  'List all repositories',
+  'List all Git repositories in an Azure DevOps project. Returns repository details including ID, name, project info, default branch, size, and URLs. Supports both project-specific and organization-wide repository listing. Results are automatically truncated if they exceed size limits.',
   {
-    project: z.string().optional().describe('Project name'),
+    project: z
+      .string()
+      .optional()
+      .describe(
+        'Project name to list repositories from. If not provided, uses the default project from configuration.'
+      ),
   },
   async ({ project }) => {
     try {
-      const result = await azureDevOpsService.getRepositories(project || '');
+      const result = await azureDevOpsService.getRepositories(project);
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: safeResponse(result) }],
       };
     } catch (error) {
-      console.error(
-        `Error executing azure_devops_repositories for project ${project || 'default'}:`,
-        error
-      );
       return {
+        isError: true,
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2),
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
       };
@@ -310,32 +301,31 @@ server.tool(
 
 server.tool(
   'azure_devops_pull_requests',
-  'List all pull requests for a repository',
+  'List all pull requests in a repository. Returns comprehensive PR information including title, description, status, reviewers, work items, commits, and thread counts. Supports filtering and pagination. Results are automatically truncated if they exceed size limits.',
   {
-    repositoryId: z.string().describe('Repository ID'),
-    project: z.string().optional().describe('Project name'),
+    repositoryId: z
+      .string()
+      .describe('Repository ID to list pull requests from. Must be a valid repository identifier.'),
+    project: z
+      .string()
+      .optional()
+      .describe(
+        'Project name containing the repository. If not provided, uses the default project from configuration.'
+      ),
   },
   async ({ repositoryId, project }) => {
     try {
-      const result = await azureDevOpsService.getPullRequests(repositoryId, project || '');
+      const result = await azureDevOpsService.getPullRequests(repositoryId, project);
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: safeResponse(result) }],
       };
     } catch (error) {
-      console.error(
-        `Error executing azure_devops_pull_requests for repository ${repositoryId}:`,
-        error
-      );
       return {
+        isError: true,
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2),
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
       };
@@ -345,37 +335,40 @@ server.tool(
 
 server.tool(
   'azure_devops_pull_request_by_id',
-  'Get a pull request by ID',
+  'Get detailed information about a specific pull request. Returns complete PR data including title, description, status, reviewers, work items, commits, policy evaluations, and merge status. Useful for getting the full context of a PR. Response includes all associated metadata.',
   {
-    repositoryId: z.string().describe('Repository ID'),
-    pullRequestId: z.number().describe('Pull request ID'),
-    project: z.string().optional().describe('Project name'),
+    repositoryId: z
+      .string()
+      .describe(
+        'Repository ID containing the pull request. Must be a valid repository identifier.'
+      ),
+    pullRequestId: z
+      .number()
+      .describe('Pull request ID to retrieve. Must be a valid PR number in the repository.'),
+    project: z
+      .string()
+      .optional()
+      .describe(
+        'Project name containing the repository. If not provided, uses the default project from configuration.'
+      ),
   },
   async ({ repositoryId, pullRequestId, project }) => {
     try {
       const result = await azureDevOpsService.getPullRequestById(
         repositoryId,
         pullRequestId,
-        project || ''
+        project
       );
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: safeResponse(result) }],
       };
     } catch (error) {
-      console.error(
-        `Error executing azure_devops_pull_request_by_id for repository ${repositoryId} PR #${pullRequestId}:`,
-        error
-      );
       return {
+        isError: true,
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2),
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
       };
@@ -385,66 +378,99 @@ server.tool(
 
 server.tool(
   'azure_devops_pull_request_threads',
-  'Get threads from a pull request',
+  'Get all comment threads in a pull request. Returns thread details including comments, status, relationships, and file annotations. Supports both file-specific and general comments. Results include thread context and metadata.',
   {
-    repositoryId: z.string().describe('Repository ID'),
-    pullRequestId: z.number().describe('Pull request ID'),
-    project: z.string().describe('Project name'),
+    repositoryId: z
+      .string()
+      .describe(
+        'Repository ID containing the pull request. Must be a valid repository identifier.'
+      ),
+    pullRequestId: z
+      .number()
+      .describe('Pull request ID to get threads from. Must be a valid PR number.'),
+    project: z
+      .string()
+      .describe('Project name containing the repository. Required for thread retrieval.'),
   },
   async ({ repositoryId, pullRequestId, project }) => {
-    const result = await azureDevOpsService.getPullRequestThreads(
-      repositoryId,
-      pullRequestId,
-      project
-    );
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
+    try {
+      const result = await azureDevOpsService.getPullRequestThreads(
+        repositoryId,
+        pullRequestId,
+        project
+      );
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
   }
 );
 
 // New tool for work item attachments
 server.tool(
   'azure_devops_work_item_attachments',
-  'Get attachments for a specific work item',
+  'Get all attachments associated with a work item. Returns attachment details including file name, size, creator, timestamps, and download URLs. Supports all attachment types including images, documents, and binary files. Results include metadata for each attachment.',
   {
-    id: z.number().describe('Work item ID'),
+    id: z
+      .number()
+      .describe('Work item ID to get attachments from. Must be a valid work item identifier.'),
   },
   async ({ id }) => {
-    const result = await azureDevOpsService.getWorkItemAttachments(id);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
+    try {
+      const result = await azureDevOpsService.getWorkItemAttachments(id);
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
   }
 );
 
 // New tool for work item links
 server.tool(
   'azure_devops_work_item_links',
-  'Get links for a specific work item',
+  'Get all links and relationships for a work item. Returns detailed link information including link types, target work items, and relationship attributes. Supports all link types (Parent/Child, Related, Predecessor/Successor, etc). Results include full context of work item relationships.',
   {
-    id: z.number().describe('Work item ID'),
+    id: z
+      .number()
+      .describe('Work item ID to get links from. Must be a valid work item identifier.'),
   },
   async ({ id }) => {
-    const result = await azureDevOpsService.getWorkItemLinks(id);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
+    try {
+      const result = await azureDevOpsService.getWorkItemLinks(id);
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
   }
 );
 
@@ -740,28 +766,28 @@ server.tool(
 // Test Plans
 server.tool(
   'azure_devops_test_plans',
-  'List all test plans for a project',
+  'List all test plans in a project. Returns test plan details including ID, name, area path, and iteration path. Results are automatically truncated if they exceed size limits while preserving essential metadata.',
   {
-    project: z.string().describe('Project name'),
+    project: z
+      .string()
+      .optional()
+      .describe(
+        'The name of the project. If not provided, uses the default project from configuration.'
+      ),
   },
   async ({ project }) => {
     try {
       const result = await azureDevOpsService.getTestPlans(project);
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: safeResponse(result) }],
       };
     } catch (error) {
-      console.error('Error executing azure_devops_test_plans:', error);
       return {
+        isError: true,
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2),
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
       };
@@ -836,30 +862,30 @@ server.tool(
 
 server.tool(
   'azure_devops_test_suite',
-  'Get a test suite by ID',
+  'Get detailed information about a specific test suite by ID. Returns suite details, test cases, configurations, and related information. Supports all test suite types (static, requirement-based, query-based).',
   {
-    project: z.string().describe('Project name'),
-    testPlanId: z.number().describe('Test plan ID'),
-    testSuiteId: z.number().describe('Test suite ID'),
+    project: z
+      .string()
+      .optional()
+      .describe(
+        'The name of the project. If not provided, uses the default project from configuration.'
+      ),
+    testPlanId: z.number().describe('The ID of the test plan containing the test suite'),
+    testSuiteId: z.number().describe('The ID of the test suite to retrieve'),
   },
   async ({ project, testPlanId, testSuiteId }) => {
     try {
       const result = await azureDevOpsService.getTestSuite(project, testPlanId, testSuiteId);
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: safeResponse(result) }],
       };
     } catch (error) {
-      console.error('Error executing azure_devops_test_suite:', error);
       return {
+        isError: true,
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ error: String(error) }, null, 2),
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
       };
