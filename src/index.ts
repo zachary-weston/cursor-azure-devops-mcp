@@ -933,15 +933,20 @@ server.tool(
   'Execute a Work Item Query Language (WIQL) query and return the results. Supports all query operators and clauses including WHERE, ORDER BY, etc. Returns work item references that can be retrieved using azure_devops_work_items.',
   {
     query: z.string().describe('The WIQL query to execute. Must be a valid WIQL query string.'),
-    project: z.string().optional().describe('Project name for project-scoped queries. If not provided, uses the default project from configuration.'),
-    timeZone: z.string().optional().describe('Optional timezone for query execution')
+    project: z
+      .string()
+      .optional()
+      .describe(
+        'Project name for project-scoped queries. If not provided, uses the default project from configuration.'
+      ),
+    timeZone: z.string().optional().describe('Optional timezone for query execution'),
   },
   async ({ query, project, timeZone }) => {
     try {
       const result = await azureDevOpsService.executeWiqlQuery({
         query,
         project,
-        timeZone
+        timeZone,
       });
       return {
         content: [{ type: 'text', text: safeResponse(result) }],
@@ -966,15 +971,29 @@ server.tool(
   'Update a work item with new field values, relations, or comments. Supports all work item types (bugs, tasks, user stories, etc). Returns the updated work item.',
   {
     id: z.number().describe('The ID of the work item to update'),
-    fields: z.record(z.any()).optional().describe('A key-value object of field names and values to update'),
-    relations: z.array(z.object({
-      rel: z.string().describe('Relation type (e.g., "System.LinkTypes.Hierarchy-Forward")'),
-      url: z.string().optional().describe('URL of the related work item'),
-      attributes: z.record(z.any()).optional().describe('Relation attributes'),
-      remove: z.boolean().optional().describe('Set to true to remove this relation')
-    })).optional().describe('Array of work item relations to add or remove'),
-    comments: z.array(z.string()).optional().describe('Array of comments to add to the work item history'),
-    project: z.string().optional().describe('Project name. If not provided, uses the default project from configuration.')
+    fields: z
+      .record(z.any())
+      .optional()
+      .describe('A key-value object of field names and values to update'),
+    relations: z
+      .array(
+        z.object({
+          rel: z.string().describe('Relation type (e.g., "System.LinkTypes.Hierarchy-Forward")'),
+          url: z.string().optional().describe('URL of the related work item'),
+          attributes: z.record(z.any()).optional().describe('Relation attributes'),
+          remove: z.boolean().optional().describe('Set to true to remove this relation'),
+        })
+      )
+      .optional()
+      .describe('Array of work item relations to add or remove'),
+    comments: z
+      .array(z.string())
+      .optional()
+      .describe('Array of comments to add to the work item history'),
+    project: z
+      .string()
+      .optional()
+      .describe('Project name. If not provided, uses the default project from configuration.'),
   },
   async ({ id, fields, relations, comments, project }) => {
     try {
@@ -983,7 +1002,7 @@ server.tool(
         fields,
         relations,
         comments,
-        project
+        project,
       });
       return {
         content: [{ type: 'text', text: safeResponse(result) }],
@@ -1009,8 +1028,13 @@ server.tool(
   {
     testSuiteId: z.number().describe('Test suite ID to add the test case to'),
     testPlanId: z.number().describe('Test plan ID containing the test suite'),
-    workItemFields: z.record(z.any()).describe('Fields for the new test case work item (must include System.Title)'),
-    project: z.string().optional().describe('Project name. If not provided, uses the default project from configuration.')
+    workItemFields: z
+      .record(z.any())
+      .describe('Fields for the new test case work item (must include System.Title)'),
+    project: z
+      .string()
+      .optional()
+      .describe('Project name. If not provided, uses the default project from configuration.'),
   },
   async ({ testSuiteId, testPlanId, workItemFields, project }) => {
     try {
@@ -1018,7 +1042,7 @@ server.tool(
         testSuiteId,
         testPlanId,
         workItemFields,
-        project
+        project,
       });
       return {
         content: [{ type: 'text', text: safeResponse(result) }],

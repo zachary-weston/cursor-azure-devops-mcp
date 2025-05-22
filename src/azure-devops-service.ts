@@ -1550,7 +1550,7 @@ class AzureDevOpsService {
 
     try {
       let queryResult;
-      
+
       // If project is specified, execute in project context
       if (projectName) {
         queryResult = await this.workItemClient.queryByWiql(wiql, projectName, wiqlQuery.timeZone);
@@ -1562,7 +1562,9 @@ class AzureDevOpsService {
       return queryResult;
     } catch (error) {
       console.error('Error executing WIQL query:', error);
-      throw new Error(`Failed to execute WIQL query: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to execute WIQL query: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -1609,7 +1611,7 @@ class AzureDevOpsService {
             if (!workItem.relations) continue;
 
             const relationIndex = workItem.relations.findIndex(
-              (r) => r.rel === relation.rel && r.url === relation.url
+              r => r.rel === relation.rel && r.url === relation.url
             );
 
             if (relationIndex >= 0) {
@@ -1658,7 +1660,9 @@ class AzureDevOpsService {
       }
     } catch (error) {
       console.error('Error updating work item:', error);
-      throw new Error(`Failed to update work item: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to update work item: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -1725,7 +1729,9 @@ class AzureDevOpsService {
       };
     } catch (error) {
       console.error('Error creating test case:', error);
-      throw new Error(`Failed to create test case: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to create test case: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 }

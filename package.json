@@ -18,8 +18,7 @@
     "dev": "tsc -w",
     "test-connection": "node build/test-connection.js",
     "sse-server": "node build/sse-server.js",
-    "build": "npm run format && tsc && node -e \"require('fs').chmodSync('build/index.js', '755') && require('fs').chmodSync('build/sse-server.js', '755')\"",
-    "prepare": "npm run build",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755') && require('fs').chmodSync('build/sse-server.js', '755')\"",
     "prepublishOnly": "npm run check && npm run build && npm run security-check",
     "security-check": "node security-check.js",
     "lint": "eslint . --ext .ts",
@@ -39,7 +38,7 @@
     "ide",
     "model-context-protocol"
   ],
-  "author": "Maxim Titovich <maxim.work@titovich.me> (https://github.com/maximtitovich)",
+  "author": "Maxim Titovich <maxim.work@titovich.me>",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
