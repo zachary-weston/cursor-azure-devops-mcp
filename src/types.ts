@@ -233,3 +233,59 @@ export interface WorkItemCommentsResponse {
   comments: WorkItemComment[];
   error?: string; // Optional error message if something went wrong
 }
+
+// WIQL Query Interfaces
+export interface WiqlQuery {
+  query: string;
+  project?: string;
+  timeZone?: string; // Optional timezone for query execution
+}
+
+export interface WiqlQueryResult {
+  workItems: WorkItemReference[];
+  queryType?: string;
+  asOf?: string;
+  columns?: WorkItemFieldReference[];
+}
+
+export interface WorkItemReference {
+  id: number;
+  url: string;
+}
+
+export interface WorkItemFieldReference {
+  name: string;
+  referenceName: string;
+}
+
+// Work Item Update Interfaces
+export interface WorkItemUpdateRequest {
+  id: number;
+  fields?: Record<string, any>;
+  relations?: WorkItemRelationUpdate[];
+  comments?: string[];
+  project?: string;
+}
+
+export interface WorkItemRelationUpdate {
+  rel: string;
+  url?: string;
+  attributes?: Record<string, any>;
+  remove?: boolean; // Set to true to remove this relation
+}
+
+// Test Case Create Interface
+export interface TestCaseCreateRequest {
+  testSuiteId: number;
+  testPlanId: number;
+  workItemFields: Record<string, any>;
+  project?: string;
+}
+
+export interface TestCaseCreateResponse {
+  testCaseId: number;
+  workItemId: number;
+  name?: string;
+  status?: string;
+  url?: string;
+}

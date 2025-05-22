@@ -16,6 +16,12 @@ import {
   WorkItemRelation,
   WorkItemLink,
   WorkItemCommentsResponse,
+  WiqlQuery,
+  WiqlQueryResult,
+  WorkItemReference,
+  WorkItemUpdateRequest,
+  TestCaseCreateRequest,
+  TestCaseCreateResponse,
 } from './types.js';
 
 /**
@@ -1519,6 +1525,207 @@ class AzureDevOpsService {
     } catch (error) {
       console.error('Error getting test plan:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Execute a WIQL query and return the results
+   * @param wiqlQuery The WIQL query to execute
+   * @returns The query results with work item references
+   */
+  async executeWiqlQuery(wiqlQuery: WiqlQuery): Promise<WiqlQueryResult> {
+    await this.initialize();
+
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    // Use the provided project or fall back to the default project
+    const projectName = wiqlQuery.project || this.defaultProject;
+
+    // Prepare the WIQL query object
+    const wiql = {
+      query: wiqlQuery.query,
+    };
+
+    try {
+      let queryResult;
+      
+      // If project is specified, execute in project context
+      if (projectName) {
+        queryResult = await this.workItemClient.queryByWiql(wiql, projectName, wiqlQuery.timeZone);
+      } else {
+        // Execute across all projects
+        queryResult = await this.workItemClient.queryByWiql(wiql, null, wiqlQuery.timeZone);
+      }
+
+      return queryResult;
+    } catch (error) {
+      console.error('Error executing WIQL query:', error);
+      throw new Error(`Failed to execute WIQL query: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Update a work item with the provided fields and relations
+   * @param updateRequest The work item update request
+   * @returns The updated work item
+   */
+  async updateWorkItem(updateRequest: WorkItemUpdateRequest): Promise<WorkItem> {
+    await this.initialize();
+
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    // Use the provided project or fall back to the default project
+    const projectName = updateRequest.project || this.defaultProject;
+
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+
+    try {
+      // Prepare patches for field updates
+      const patchDocument: any[] = [];
+
+      // Add field updates
+      if (updateRequest.fields && Object.keys(updateRequest.fields).length > 0) {
+        for (const [field, value] of Object.entries(updateRequest.fields)) {
+          patchDocument.push({
+            op: 'add',
+            path: `/fields/${field}`,
+            value: value,
+          });
+        }
+      }
+
+      // Add relation updates
+      if (updateRequest.relations && updateRequest.relations.length > 0) {
+        for (const relation of updateRequest.relations) {
+          if (relation.remove) {
+            // Find the relation index in the existing work item
+            const workItem = await this.getWorkItem(updateRequest.id);
+            if (!workItem.relations) continue;
+
+            const relationIndex = workItem.relations.findIndex(
+              (r) => r.rel === relation.rel && r.url === relation.url
+            );
+
+            if (relationIndex >= 0) {
+              patchDocument.push({
+                op: 'remove',
+                path: `/relations/${relationIndex}`,
+              });
+            }
+          } else {
+            patchDocument.push({
+              op: 'add',
+              path: '/relations/-',
+              value: {
+                rel: relation.rel,
+                url: relation.url,
+                attributes: relation.attributes || {},
+              },
+            });
+          }
+        }
+      }
+
+      // Add comments if provided
+      if (updateRequest.comments && updateRequest.comments.length > 0) {
+        for (const comment of updateRequest.comments) {
+          // Add a history entry with the comment
+          patchDocument.push({
+            op: 'add',
+            path: '/fields/System.History',
+            value: comment,
+          });
+        }
+      }
+
+      // Execute the update if there are changes to make
+      if (patchDocument.length > 0) {
+        const updatedWorkItem = await this.workItemClient.updateWorkItem(
+          {},
+          patchDocument,
+          updateRequest.id,
+          projectName
+        );
+        return updatedWorkItem;
+      } else {
+        throw new Error('No updates specified for the work item');
+      }
+    } catch (error) {
+      console.error('Error updating work item:', error);
+      throw new Error(`Failed to update work item: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Create a new test case in a test suite
+   * @param createRequest The test case creation request
+   * @returns The created test case
+   */
+  async createTestCase(createRequest: TestCaseCreateRequest): Promise<TestCaseCreateResponse> {
+    await this.initialize();
+
+    if (!this.workItemClient || !this.testPlanClient) {
+      throw new Error('Work item client or test plan client not initialized');
+    }
+
+    // Use the provided project or fall back to the default project
+    const projectName = createRequest.project || this.defaultProject;
+
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+
+    try {
+      // 1. Create a new Test Case work item
+      const patchDocument: any[] = [];
+
+      // Ensure we have a work item type set to Test Case
+      if (!createRequest.workItemFields['System.WorkItemType']) {
+        createRequest.workItemFields['System.WorkItemType'] = 'Test Case';
+      }
+
+      // Add all the fields
+      for (const [field, value] of Object.entries(createRequest.workItemFields)) {
+        patchDocument.push({
+          op: 'add',
+          path: `/fields/${field}`,
+          value: value,
+        });
+      }
+
+      // Create the work item
+      const workItem = await this.workItemClient.createWorkItem(
+        {},
+        patchDocument,
+        projectName,
+        'Test Case'
+      );
+
+      // 2. Add the test case to the test suite
+      await this.testPlanClient.addTestCasesToSuite(
+        projectName,
+        createRequest.testPlanId,
+        createRequest.testSuiteId,
+        [workItem.id]
+      );
+
+      // 3. Return the response
+      return {
+        testCaseId: workItem.id,
+        workItemId: workItem.id,
+        name: workItem.fields && workItem.fields['System.Title'],
+        status: workItem.fields && workItem.fields['System.State'],
+        url: workItem.url,
+      };
+    } catch (error) {
+      console.error('Error creating test case:', error);
+      throw new Error(`Failed to create test case: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

@@ -26,6 +26,10 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
   - List test suites in a test plan
   - Get test suite details by ID
   - List test cases in a test suite
+  - Create new test cases in a test suite
+- Work Item Management:
+  - Execute WIQL (Work Item Query Language) queries
+  - Update work item fields, relations, and add comments
 - Smart Response Handling:
   - Automatic truncation of large responses to fit AI model limits
   - Preservation of essential fields in truncated responses
@@ -61,6 +65,14 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 - Parameter ordering in test suite methods to comply with TypeScript requirements
 - Error handling improvements in test-related API calls
 - Response formatting for large test suite responses
+
+### Version 1.1.2
+
+#### Added
+- Advanced Work Item Management:
+  - New tool: `azure_devops_wiql_query` - Execute WIQL queries to find and filter work items
+  - New tool: `azure_devops_update_work_item` - Update work item fields, relations, and add comments
+  - New tool: `azure_devops_create_test_case` - Create new test cases in a test suite
 
 ## Installation
 
@@ -288,6 +300,9 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_test_suites` | List all test suites for a test plan | `project` (string), `testPlanId` (number) |
 | `azure_devops_test_suite` | Get a test suite by ID | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
 | `azure_devops_test_cases` | List all test cases for a test suite | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
+| `azure_devops_wiql_query` | Execute a WIQL query | `query` (string), optional: `project` (string), `timeZone` (string) |
+| `azure_devops_update_work_item` | Update a work item | `id` (number), optional: `fields` (object), `relations` (array), `comments` (array), `project` (string) |
+| `azure_devops_create_test_case` | Create a new test case | `testSuiteId` (number), `testPlanId` (number), `workItemFields` (object), optional: `project` (string) |
 
 ### Test Management Tools
 
@@ -339,5 +354,116 @@ The response format includes truncation metadata when necessary:
   "isTruncated": true,
   "truncatedCount": 80,
   "message": "Response was truncated. Showing 20 of 100 items."
+}
+```
+
+### WIQL Query Tool
+
+The WIQL (Work Item Query Language) query tool allows you to execute powerful SQL-like queries against work items in Azure DevOps.
+
+#### Example WIQL Queries:
+
+**Find all active bugs assigned to the current user:**
+```json
+{
+  "query": "SELECT [System.Id], [System.Title], [System.State] FROM WorkItems WHERE [System.WorkItemType] = 'Bug' AND [System.State] = 'Active' AND [System.AssignedTo] = @Me",
+  "project": "YourProject"
+}
+```
+
+**Find all user stories that were created in the last 30 days:**
+```json
+{
+  "query": "SELECT [System.Id], [System.Title], [System.CreatedDate] FROM WorkItems WHERE [System.WorkItemType] = 'User Story' AND [System.CreatedDate] >= @Today-30",
+  "project": "YourProject"
+}
+```
+
+**Find all work items linked to a specific work item:**
+```json
+{
+  "query": "SELECT [System.Id], [System.Title], [System.State] FROM WorkItemLinks WHERE [Source].[System.Id] = 123 AND [System.Links.LinkType] = 'Related' MODE (MustContain)",
+  "project": "YourProject"
+}
+```
+
+### Work Item Update Tool
+
+The work item update tool allows you to modify work items by updating fields, adding/removing relations, and adding comments to the history.
+
+#### Example Usage:
+
+**Update work item fields:**
+```json
+{
+  "id": 123,
+  "fields": {
+    "System.Title": "Updated Title",
+    "System.State": "Active",
+    "System.AssignedTo": "user@example.com",
+    "System.Description": "This is the updated description",
+    "Microsoft.VSTS.Common.Priority": 1
+  },
+  "project": "YourProject"
+}
+```
+
+**Add a comment to a work item:**
+```json
+{
+  "id": 123,
+  "comments": ["This is a new comment on the work item."],
+  "project": "YourProject"
+}
+```
+
+**Add a parent-child relation:**
+```json
+{
+  "id": 123,
+  "relations": [
+    {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "https://dev.azure.com/organization/project/_apis/wit/workItems/456"
+    }
+  ],
+  "project": "YourProject"
+}
+```
+
+### Test Case Creation Tool
+
+The test case creation tool enables you to create new test cases directly in a test suite.
+
+#### Example Usage:
+
+**Create a basic test case:**
+```json
+{
+  "testSuiteId": 186771,
+  "testPlanId": 185735,
+  "workItemFields": {
+    "System.Title": "Verify login functionality",
+    "System.Description": "Test case to verify user login with valid credentials",
+    "Microsoft.VSTS.TCM.Steps": "<steps><step id='1'><parameterizedString>Navigate to login page</parameterizedString><parameterizedString>Login page is displayed</parameterizedString></step><step id='2'><parameterizedString>Enter valid credentials and click login</parameterizedString><parameterizedString>User is successfully logged in</parameterizedString></step></steps>"
+  },
+  "project": "YourProject"
+}
+```
+
+**Create a test case with custom fields:**
+```json
+{
+  "testSuiteId": 186771,
+  "testPlanId": 185735,
+  "workItemFields": {
+    "System.Title": "Verify error message for invalid login",
+    "System.Description": "Test case to verify error message when invalid credentials are used",
+    "Microsoft.VSTS.TCM.Steps": "<steps><step id='1'><parameterizedString>Navigate to login page</parameterizedString><parameterizedString>Login page is displayed</parameterizedString></step><step id='2'><parameterizedString>Enter invalid credentials and click login</parameterizedString><parameterizedString>Error message is displayed</parameterizedString></step></steps>",
+    "Microsoft.VSTS.Common.Priority": 1,
+    "System.AreaPath": "YourProject\\Area",
+    "System.IterationPath": "YourProject\\Sprint 1"
+  },
+  "project": "YourProject"
 }
 ```
